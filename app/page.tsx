@@ -45,12 +45,6 @@ export default function LoginPage() {
         <button className="w-full bg-green-600 hover:bg-green-700 py-2 rounded mt-2">
           Login
         </button>
-        <p
-          onClick={() => router.push("/register")}
-          className="mt-4 text-sm text-center text-gray-400 cursor-pointer hover:underline"
-        >
-          Belum punya akun? Register
-        </p>
       </form>
     </main>
   );

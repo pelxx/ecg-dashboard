@@ -10,12 +10,18 @@ import {
   CartesianGrid,
 } from "recharts";
 
+type ECGData = {
+  time: number;
+  value: number;
+};
+
 type Props = {
-  data: number[];
+  data: ECGData[];
 };
 
 export default function ECGChart({ data }: Props) {
-  const chartData = data.map((v, i) => ({ i, value: v }));
+  // ✅ perbaikan di sini
+  const chartData = data.map((v, i) => ({ i, value: v.value }));
 
   return (
     <div className="w-full h-72 md:h-96 bg-black/60 rounded-lg p-3 border border-green-700/30">
