@@ -1,44 +1,49 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { ref, onValue } from "firebase/database";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect, useState, useRef } from "react";
+import { ref, onValue, push, set } from "firebase/database";
+import mqtt, { MqttClient } from "mqtt";
 import { rtdb } from "@/lib/firebase";
-
-import AddPatientModal from "@/components/patients/AddPatientModal";
-import EditPatientModal from "@/components/patients/EditPatientModal";
-import DeleteConfirmModal from "@/components/patients/DeleteConfirmModal";
+import dynamic from "next/dynamic";
 import PatientInfo from "@/components/PatientInfo";
-import ECGChart from "@/components/ECGChart";
+import ControlPanel from "@/components/ControlPanel";
+import DataLogger from "@/components/DataLogger";
 
-type Patient = {
+const ECGChart = dynamic(() => import("@/components/ECGChart"), { ssr: false });
+
+// --- Definisi Tipe Data ---
+interface ECGDataPoint {
+  timestamp: number;
+  value: number;
+}
+
+interface Patient {
   key: string;
   nama: string;
   umur: number;
   jenis_kelamin: string;
-};
+}
 
-export default function PatientsPage() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const key = params.get("key");
+// State untuk menyimpan data ECG dari semua pasien, dipisah per lead
+interface AllLeadsData {
+  [patientKey: string]: {
+    lead1: ECGDataPoint[];
+    lead2: ECGDataPoint[];
+    lead3: ECGDataPoint[];
+  };
+}
 
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+const MAX_POINTS_PER_CHART = 500; // Batas jumlah data point di grafik untuk performa
+
+export default function PatientDashboard() {
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [liveEcgData, setLiveEcgData] = useState<AllLeadsData>({});
+  const mqttClientRef = useRef<MqttClient | null>(null);
 
-  const [addOpen, setAddOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [currentKey, setCurrentKey] = useState<string | null>(null);
-  const [currentData, setCurrentData] = useState<any>(null);
-
-  // 🔹 Data ECG realtime
-  const [ecgData, setEcgData] = useState<any[]>([]);
-
-  // 🔹 Ambil semua pasien
+  // 1. Ambil daftar pasien dari RTDB
   useEffect(() => {
     const node = ref(rtdb, "patients");
-    const unsub = onValue(node, (snap) => {
+    onValue(node, (snap) => {
       const val = snap.val() || {};
       const arr: Patient[] = Object.entries(val).map(([k, v]: any) => ({
         key: k,
@@ -46,169 +51,122 @@ export default function PatientsPage() {
         umur: v.umur,
         jenis_kelamin: v.jenis_kelamin,
       }));
-      arr.sort((a: any, b: any) => (b?.createdAt || 0) - (a?.createdAt || 0));
       setPatients(arr);
-      setLoading(false);
     });
-    return () => unsub();
   }, []);
 
-  // 🔹 Kalau ada ?key=..., ambil data pasien tsb
+  // 2. Setup koneksi dan listener MQTT
   useEffect(() => {
-    if (key) {
-      const patient = patients.find((p) => p.key === key);
-      setSelectedPatient(patient || null);
-    } else {
-      setSelectedPatient(null);
-    }
-  }, [key, patients]);
+    if (mqttClientRef.current) return;
 
-  // 🔹 Ambil data ECG realtime untuk pasien yang dipilih
-  useEffect(() => {
-    if (!selectedPatient) return;
-    const ecgRef = ref(rtdb, `ecg/${selectedPatient.key}/realtime`);
-    const unsub = onValue(ecgRef, (snap) => {
-      const val = snap.val();
-      if (!val) return;
-      const arr = Object.values(val);
-      setEcgData(arr.slice(-200)); // ambil 200 data terakhir
+    const client: MqttClient = mqtt.connect("wss://broker.emqx.io:8084/mqtt");
+    mqttClientRef.current = client;
+
+    client.on("connect", () => {
+      console.log("✅ Dasbor terhubung ke MQTT broker");
+      client.subscribe("ecg/+/realtime", (err) => {
+        if (err) console.error("❌ Gagal subscribe:", err);
+        else console.log("📡 Berhasil subscribe ke ecg/+/realtime");
+      });
     });
-    return () => unsub();
-  }, [selectedPatient]);
 
-  const openEdit = (p: Patient) => {
-    setCurrentKey(p.key);
-    setCurrentData({ nama: p.nama, umur: p.umur, jenis_kelamin: p.jenis_kelamin });
-    setEditOpen(true);
+    client.on("message", (topic: string, message: Buffer) => {
+      try {
+        const parts = topic.split("/");
+        const patientId = parts[1];
+        if (!patientId) return;
+
+        // Payload sekarang berisi array: { lead1: [...], lead2: [...], lead3: [...] }
+        const chunk = JSON.parse(message.toString());
+        const { lead1 = [], lead2 = [], lead3 = [] } = chunk;
+        const timestamp = chunk.timestamp || Date.now();
+
+        setLiveEcgData(prevData => {
+          const currentPatientData = prevData[patientId] || { lead1: [], lead2: [], lead3: [] };
+
+          // Mengubah array angka menjadi array objek { timestamp, value }
+          const newPoints1 = lead1.map((val: number, i: number) => ({ timestamp: timestamp + i * 4, value: val }));
+          const newPoints2 = lead2.map((val: number, i: number) => ({ timestamp: timestamp + i * 4, value: val }));
+          const newPoints3 = lead3.map((val: number, i: number) => ({ timestamp: timestamp + i * 4, value: val }));
+
+          // Menggabungkan data lama dengan chunk baru dan membatasinya
+          const updatedLead1 = [...currentPatientData.lead1, ...newPoints1].slice(-MAX_POINTS_PER_CHART);
+          const updatedLead2 = [...currentPatientData.lead2, ...newPoints2].slice(-MAX_POINTS_PER_CHART);
+          const updatedLead3 = [...currentPatientData.lead3, ...newPoints3].slice(-MAX_POINTS_PER_CHART);
+
+          return {
+            ...prevData,
+            [patientId]: { lead1: updatedLead1, lead2: updatedLead2, lead3: updatedLead3 },
+          };
+        });
+
+      } catch (err) {
+        console.error("❌ Error menangani pesan MQTT:", err);
+      }
+    });
+
+    return () => {
+      if (client) client.end(true);
+    };
+  }, []);
+
+  // Fungsi untuk menyimpan snapshot
+  const handleManualSave = async () => {
+    if (!selectedPatient) return alert("Pilih pasien.");
+    const currentData = liveEcgData[selectedPatient.key];
+    if (!currentData || currentData.lead1.length === 0) return alert("Tidak ada data untuk disimpan.");
+
+    try {
+      const newRecordRef = push(ref(rtdb, 'ecg/records'));
+      await set(newRecordRef, {
+        createdAt: Date.now(),
+        patientId: selectedPatient.key,
+        note: `Manual save for ${selectedPatient.nama}`,
+        data: currentData // Simpan semua 3 lead
+      });
+      alert('Snapshot berhasil disimpan!');
+    } catch (error) {
+      console.error("Gagal menyimpan snapshot:", error);
+    }
   };
 
-  const openDelete = (key: string) => {
-    setCurrentKey(key);
-    setDeleteOpen(true);
-  };
+  const selectedLeads = selectedPatient ? liveEcgData[selectedPatient.key] : null;
 
-  const handleCardClick = (key: string) => {
-    router.push(`/patients?key=${key}`);
-  };
-
-  // 🔹 Halaman detail pasien
-  if (key && selectedPatient) {
-    return (
-      <main className="min-h-screen bg-black text-white p-6">
-        <header className="max-w-4xl mx-auto mb-6 flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-blue-300">Detail Pasien</h1>
-          <button
-            onClick={() => router.push("/patients")}
-            className="px-3 py-1 rounded bg-gray-700 text-white hover:bg-gray-600"
-          >
-            ← Kembali
-          </button>
-        </header>
-
-        <section className="max-w-4xl mx-auto flex flex-col gap-4">
-          <PatientInfo
-            id={selectedPatient.key}
-            name={selectedPatient.nama}
-            age={selectedPatient.umur}
-            gender={selectedPatient.jenis_kelamin}
-          />
-
-          {/* 🔹 Tampilkan grafik ECG */}
-          <div className="bg-gray-900 p-4 rounded-lg border border-blue-800/50">
-            <h2 className="text-xl font-semibold text-blue-300 mb-3">
-              ECG Realtime
-            </h2>
-            <ECGChart
-              data={ecgData.map((v, i) => ({
-                time: i,
-                value: typeof v === "number" ? v : v.lead1 || 0,
-              }))}
-            />
-          </div>
-        </section>
-      </main>
-    );
-  }
-
-  // 🔹 Halaman daftar pasien
   return (
     <main className="min-h-screen bg-black text-white p-6">
-      <header className="max-w-6xl mx-auto mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-blue-300">Daftar Pasien</h1>
-            <p className="text-sm text-gray-400">
-              Tambah, edit, atau hapus pasien. Klik kartu untuk detail.
-            </p>
-          </div>
-          <button
-            onClick={() => setAddOpen(true)}
-            className="px-4 py-2 rounded bg-blue-500 text-black font-semibold"
-          >
-            + Tambah Pasien
-          </button>
+      <h1 className="text-3xl font-bold text-green-400 mb-6">ECG Live Dashboard (Chunk Mode)</h1>
+      <div className="flex flex-wrap gap-6">
+        <div className="w-full md:w-1/4 bg-gray-900/60 p-4 rounded-lg border border-gray-700">
+          <h2 className="text-lg font-semibold mb-3 text-green-300">Daftar Pasien</h2>
+          {patients.map((p) => (
+            <div key={p.key} onClick={() => setSelectedPatient(p)}
+              className={`p-2 rounded mb-2 cursor-pointer ${selectedPatient?.key === p.key ? "bg-green-800/50" : "bg-gray-800/40"} hover:bg-green-700/30`}>
+              {p.nama}
+            </div>
+          ))}
         </div>
-      </header>
-
-      <section className="max-w-6xl mx-auto">
-        {loading ? (
-          <div className="text-gray-400">Memuat...</div>
-        ) : patients.length === 0 ? (
-          <div className="text-gray-400">Belum ada pasien. Tambah pasien dulu.</div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {patients.map((p) => (
-              <div
-                key={p.key}
-                className="bg-gray-900/60 border border-blue-900/30 rounded-lg p-4 cursor-pointer hover:scale-[1.01] transition"
-                onClick={() => handleCardClick(p.key)}
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-lg font-semibold text-white">{p.nama}</h3>
-                    <p className="text-sm text-gray-400 mt-1">
-                      {p.jenis_kelamin} · {p.umur} tahun
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2 ml-3">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEdit(p);
-                      }}
-                      className="px-2 py-1 rounded bg-gray-800 text-blue-200 text-sm"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openDelete(p.key);
-                      }}
-                      className="px-2 py-1 rounded bg-red-600 text-white text-sm"
-                    >
-                      Hapus
-                    </button>
-                  </div>
-                </div>
+        <div className="flex-1 flex flex-col gap-4">
+          {selectedPatient ? (
+            <>
+              <div className="flex flex-wrap gap-4">
+                <PatientInfo id={selectedPatient.key} name={selectedPatient.nama} age={selectedPatient.umur} gender={selectedPatient.jenis_kelamin} />
+                <ControlPanel onManualSave={handleManualSave} />
               </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <AddPatientModal open={addOpen} onClose={() => setAddOpen(false)} />
-      <EditPatientModal
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        patientKey={currentKey || undefined}
-        initial={currentData}
-      />
-      <DeleteConfirmModal
-        open={deleteOpen}
-        onClose={() => setDeleteOpen(false)}
-        patientKey={currentKey || undefined}
-      />
+              <div className="bg-gray-900/60 p-4 rounded-lg border border-gray-700">
+                <h3 className="text-green-300 font-semibold mb-2">Realtime ECG Leads</h3>
+                <ECGChart data={selectedLeads ? selectedLeads.lead1.map((d, i) => ({ time: i, value: d.value })) : []} />
+                <ECGChart data={selectedLeads ? selectedLeads.lead2.map((d, i) => ({ time: i, value: d.value })) : []} />
+                <ECGChart data={selectedLeads ? selectedLeads.lead3.map((d, i) => ({ time: i, value: d.value })) : []} />
+              </div>
+              <DataLogger />
+            </>
+          ) : (
+            <div className="text-gray-400 bg-gray-900/60 p-8 rounded-lg text-center border border-gray-700">
+              Pilih pasien untuk melihat data.
+            </div>
+          )}
+        </div>
+      </div>
     </main>
   );
 }
