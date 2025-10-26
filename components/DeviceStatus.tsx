@@ -1,50 +1,64 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { ref, onValue } from "firebase/database";
-import { rtdb } from "@/lib/firebase";
+import React, { useState, useEffect } from "react";
 
-export default function DeviceStatus({ deviceId = "device1" }: { deviceId?: string }) {
-  const [lastSeen, setLastSeen] = useState<number | null>(null);
-  const [streaming, setStreaming] = useState<boolean>(false);
+type Props = {
+  deviceId: string;
+  // Prop baru: timestamp (ms) kapan data terakhir diterima untuk device ini
+  lastActivityTimestamp: number | null; 
+};
+
+// Batas waktu (ms) untuk dianggap offline (misal: 10 detik)
+const OFFLINE_THRESHOLD_MS = 10000; 
+
+export default function DeviceStatus({ deviceId, lastActivityTimestamp }: Props) {
+  const [isOnline, setIsOnline] = useState(false);
+  const [lastSeenString, setLastSeenString] = useState<string>("--");
 
   useEffect(() => {
-    const lastRef = ref(rtdb, `devices/${deviceId}/lastSeen`);
-    const streamRef = ref(rtdb, `devices/${deviceId}/streaming`);
+    // Cek status online setiap kali timestamp berubah
+    if (lastActivityTimestamp) {
+      const now = Date.now();
+      // Dianggap online jika data terakhir diterima dalam OFFLINE_THRESHOLD_MS
+      setIsOnline(now - lastActivityTimestamp < OFFLINE_THRESHOLD_MS);
+      setLastSeenString(new Date(lastActivityTimestamp).toLocaleTimeString());
+    } else {
+      setIsOnline(false); // Jika belum pernah ada data, anggap offline
+      setLastSeenString("--");
+    }
 
-    const unsub1 = onValue(lastRef, (snap) => {
-      const v = snap.val();
-      if (v) setLastSeen(Number(v));
-      else setLastSeen(null);
-    });
+    // Set interval untuk mengecek ulang status online secara berkala (misal setiap 2 detik)
+    // agar status bisa berubah menjadi offline jika tidak ada data baru masuk
+    const intervalId = setInterval(() => {
+        if (lastActivityTimestamp) {
+            setIsOnline(Date.now() - lastActivityTimestamp < OFFLINE_THRESHOLD_MS);
+        } else {
+            setIsOnline(false);
+        }
+    }, 2000); // Cek setiap 2 detik
 
-    const unsub2 = onValue(streamRef, (snap) => {
-      const v = snap.val();
-      setStreaming(Boolean(v));
-    });
+    // Cleanup interval saat komponen unmount atau props berubah
+    return () => clearInterval(intervalId);
 
-    return () => {
-      unsub1();
-      unsub2();
-    };
-  }, [deviceId]);
-
-  const online = lastSeen ? Date.now() - lastSeen < 15000 : false; // 15s window
+  }, [lastActivityTimestamp]); // Efek ini dijalankan ulang saat lastActivityTimestamp berubah
 
   return (
-    <div className="bg-gray-900/70 border border-green-800/30 rounded-lg p-4 w-full md:w-56">
+    <div className="bg-gray-900/70 border border-green-800/30 rounded-lg p-4 w-full">
       <h4 className="text-green-300 font-semibold mb-2">Device Status</h4>
       <div className="flex items-center gap-3">
-        <div className={`w-3 h-3 rounded-full ${online ? "bg-green-400" : "bg-gray-600"}`}></div>
+        {/* Indikator Online/Offline */}
+        <div className={`w-3 h-3 rounded-full ${isOnline ? "bg-green-400 animate-pulse" : "bg-gray-600"}`}></div>
         <div>
-          <div className="text-sm text-gray-300">{online ? "Online" : "Offline"}</div>
+          <div className="text-sm text-gray-300">{isOnline ? "Online" : "Offline"}</div>
+          {/* Tampilkan waktu data terakhir diterima */}
           <div className="text-xs text-gray-500">
-            last seen: {lastSeen ? new Date(lastSeen).toLocaleTimeString() : "—"}
+            Last data: {lastSeenString}
           </div>
         </div>
       </div>
 
       <div className="mt-3 text-sm text-gray-300">
-        <div>Streaming: <span className="text-white ml-1">{streaming ? "Active" : "Stopped"}</span></div>
+        {/* Status streaming sekarang sama dengan status online */}
+        <div>Streaming: <span className="text-white ml-1">{isOnline ? "Active" : "Stopped"}</span></div>
       </div>
     </div>
   );
