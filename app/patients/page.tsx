@@ -96,13 +96,24 @@ function PatientPageContent() {
           try {
               const payload = JSON.parse(messageString);
               if (topic.includes("/realtime")) {
-                  setLastDeviceActivity(prev => ({ ...prev, [patientId]: Date.now() }));
+                  
+                  const deviceTimestamp = payload.timestamp || Date.now();
+                  
+                  setLastDeviceActivity(prev => ({ ...prev, [patientId]: Date.now() })); // Selalu pakai waktu server untuk "last activity"
                   if (payload.bpm !== undefined) setLiveBPM(prev => ({ ...prev, [patientId]: payload.bpm }));
+                  
                   const { lead1 = [], lead2 = [], lead3 = [] } = payload;
-                  const timestamp = payload.timestamp || Date.now();
+                  
+                  // Logic untuk update chart (tampilan live)
                   setLiveEcgData(prev => {
                       const current = prev[patientId] || { lead1: [], lead2: [], lead3: [] };
-                      const mapToPoints = (arr: number[]): ECGDataPoint[] => arr.map((val, i) => ({ timestamp: timestamp + i * 4, value: val }));
+                      // NOTE: Asumsi 'lead1' dll adalah array angka, dan 'deviceTimestamp' adalah timestamp untuk AWAL array itu.
+                      // Jika 'lead1' cuma 1 angka, logic mapToPoints harus diubah.
+                      const mapToPoints = (arr: number[]): ECGDataPoint[] => arr.map((val, i) => ({ 
+                          timestamp: deviceTimestamp + (i * 4), // Asumsi interval 4ms (250Hz) antar data point di dalam array
+                          value: val 
+                      }));
+                      
                       return {
                           ...prev, [patientId]: {
                               lead1: [...current.lead1, ...mapToPoints(lead1)].slice(-MAX_POINTS_PER_CHART),
@@ -111,14 +122,31 @@ function PatientPageContent() {
                           }
                       };
                   });
+                  
+                  // ===============================================
+                  // DIEDIT: Logic untuk Merekam ke Database (Kembali ke Frontend)
+                  // ===============================================
                   if (recordingStatus[patientId]) {
                       const currentRecord = activeRecordRef.current[patientId];
+                      // Cek apakah ada record aktif di ref lokal
                       if (currentRecord?.id && rtdb) {
-                          const recordDataRef = ref(rtdb, `ecg/records/${currentRecord.id}/data/${timestamp}`);
-                          set(recordDataRef, { lead1, lead2, lead3 })
+                          
+                          // Kita pakai timestamp dari device sebagai key
+                          const recordDataRef = ref(rtdb, `ecg/records/${currentRecord.id}/data/${deviceTimestamp}`);
+                          
+                          // Simpan data mentah-nya
+                          set(recordDataRef, { 
+                              lead1: lead1, 
+                              lead2: lead2, 
+                              lead3: lead3 
+                          })
                               .catch(err => console.error("Firebase write error:", err));
                       }
                   }
+                  // ===============================================
+                  // AKHIR BLOK EDIT
+                  // ===============================================
+
               } else if (topic.includes("/status")) {
                   if (payload.lastSeen && rtdb) {
                       set(ref(rtdb, `devices/${patientId}/lastSeen`), payload.lastSeen);
@@ -129,17 +157,23 @@ function PatientPageContent() {
               if (topic.includes("/status") && messageString.toLowerCase() === 'offline') {
                   console.warn(`Device ${patientId} LWT 'offline'.`);
                   setLastDeviceActivity(prev => ({ ...prev, [patientId]: 0 }));
+              } else {
+                  console.error("Gagal parse MQTT message:", e, messageString);
               }
           }
       };
-  }, [recordingStatus]);
+  }, [recordingStatus]); // <-- Ini penting, agar callback selalu dapat `recordingStatus` terbaru
 
   // 4. useEffect untuk KONEKSI MQTT
   useEffect(() => {
       if (!isAuthenticated || mqttClientRef.current) return;
-      const client: MqttClient = mqtt.connect("wss://broker.emqx.io:8084/mqtt");
+      // Ambil URL broker dari environment variable
+      const brokerUrl = process.env.NEXT_PUBLIC_MQTT_BROKER_URL || "wss://broker.emqx.io:8084/mqtt";
+      const client: MqttClient = mqtt.connect(brokerUrl);
+      
       mqttClientRef.current = client;
       client.on("connect", () => {
+          console.log("MQTT Terhubung!");
           client.subscribe("ecg/+/realtime", { qos: 0 });
           client.subscribe("devices/+/status", { qos: 1 });
       });
@@ -151,22 +185,46 @@ function PatientPageContent() {
       client.on("message", handleMessage);
       client.on('error', (err) => { console.error("MQTT Connection Error:", err); });
       return () => {
-          if (client) { client.off("message", handleMessage); client.end(true); mqttClientRef.current = null; }
+          if (client) { 
+              console.log("MQTT Diputus.");
+              client.off("message", handleMessage); 
+              client.end(true); 
+              mqttClientRef.current = null; 
+          }
       };
   }, [isAuthenticated]);
 
   // --- Fungsi Handler ---
+
+  // ===============================================
+  // DIEDIT: Fungsi ini disederhanakan (Tanpa Backend Worker)
+  // ===============================================
   const handleRecordToggle = (deviceId: string, shouldRecord: boolean) => {
       if (!rtdb) return alert("Firebase RTDB Error.");
+      
+      // 1. Set React state (untuk ubah UI & memicu callback MQTT)
       setRecordingStatus(prev => ({ ...prev, [deviceId]: shouldRecord }));
+      
+      // 2. Logic untuk buat/tutup 'note' rekaman
       if (shouldRecord) {
+          // START RECORDING
           const newRecordRef = push(ref(rtdb, `ecg/records`));
           const startTime = Date.now();
-          set(newRecordRef, { createdAt: startTime, patientId: deviceId, note: `Rec Start: ${new Date(startTime).toLocaleTimeString()}` });
+          set(newRecordRef, { 
+              createdAt: startTime, 
+              patientId: deviceId, 
+              note: `Rec Start: ${new Date(startTime).toLocaleTimeString()}` 
+          });
+          // Simpan ID rekaman aktifnya di ref LOKAL
           activeRecordRef.current[deviceId] = { id: newRecordRef.key, startTime: startTime };
+
       } else {
+          // STOP RECORDING
           const stoppedRecord = activeRecordRef.current[deviceId];
+          // Hapus ID rekaman aktif dari ref LOKAL
           activeRecordRef.current[deviceId] = { id: null, startTime: null };
+          
+          // Update 'note' di rekaman yang tadi
           if (stoppedRecord?.id && stoppedRecord.startTime) {
               const noteRef = ref(rtdb, `ecg/records/${stoppedRecord.id}/note`);
               get(ref(rtdb, `ecg/records/${stoppedRecord.id}/createdAt`)).then(snap => {
@@ -175,8 +233,10 @@ function PatientPageContent() {
               });
           }
       }
-      set(ref(rtdb, `devices/${deviceId}/isRecording`), shouldRecord);
   };
+  // ===============================================
+  // AKHIR BLOK EDIT
+  // ===============================================
 
   const handleManualSave = async (deviceId: string) => {
       if (!rtdb) return alert("Firebase RTDB error.");
@@ -216,7 +276,11 @@ function PatientPageContent() {
                       deviceId={patientToShow.key}
                       lastActivityTimestamp={lastDeviceActivity[patientToShow.key] || null}
                     />
-                    <ControlPanel deviceId={patientToShow.key} onRecordToggle={handleRecordToggle} onManualSave={handleManualSave} />
+                    <ControlPanel 
+                      deviceId={patientToShow.key} 
+                      onRecordToggle={handleRecordToggle} 
+                      onManualSave={handleManualSave} 
+                    />
                 </div>
                 <div className="w-full lg:w-2/3 flex flex-col gap-6">
                     <div className="bg-gray-900 p-4 rounded-lg border border-blue-800/50">
