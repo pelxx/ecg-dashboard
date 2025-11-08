@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useMemo, useCallback } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -11,7 +11,7 @@ import {
 } from "recharts";
 
 type ECGDataPoint = {
-  timestamp: number;
+  timestamp: number; // Ini 'millis()' (durasi), e.g., 90000
   value: number;
 };
 
@@ -21,51 +21,57 @@ type Props = {
   yAxisMode: 'auto' | 'fixed'; 
 };
 
-// =============================================================
-// Pola Grid SVG (Ini udah keren, nggak saya ubah)
-// =============================================================
-// =============================================================
-// Pola Grid SVG (SETELAH PERBAIKAN)
-// =============================================================
+// Pola Grid SVG (Tema Hijau - Sesuai request-mu)
 const ecgGridPattern = (
   <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      {/* Pola Garis Kecil (misal: setiap 5 pixel) */}
       <pattern id="smallGrid" width="5" height="5" patternUnits="userSpaceOnUse">
-        {/* PERUBAHAN DI SINI: Stroke lebih terang, strokeWidth lebih tebal */}
-        <path d="M 5 0 L 0 0 0 5" fill="none" stroke="#3d6d52" strokeWidth="0.7"/> 
+        <path d="M 5 0 L 0 0 0 5" fill="none" stroke="#2a4a3a" strokeWidth="0.5"/> 
       </pattern>
-      {/* Pola Garis Besar (tetap sama, atau bisa disesuaikan juga) */}
       <pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse">
         <rect width="25" height="25" fill="url(#smallGrid)"/>
-        <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#6aa17a" strokeWidth="1.2"/> 
+        <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#4a7a5a" strokeWidth="0.8"/> 
       </pattern>
     </defs>
-    {/* Terapkan pola garis besar ke seluruh area SVG */}
     <rect width="100%" height="100%" fill="url(#grid)" />
   </svg>
 );
-// =============================================================
 
 
 export default function ECGChart({ data, title, yAxisMode }: Props) {
 
-  // Tentukan domain Sumbu Y (Fixed atau Auto)
   const yDomain: [number | 'auto', number | 'auto'] = yAxisMode === 'fixed' 
     ? [350, 900] 
     : ['auto', 'auto'];
 
-  // Fungsi untuk format timestamp jadi jam (HH:mm:ss)
-  const formatXAxis = (timestamp: number) => {
-    const date = new Date(timestamp);
-    const jam = date.getHours().toString().padStart(2, '0');
-    const menit = date.getMinutes().toString().padStart(2, '0');
-    const detik = date.getSeconds().toString().padStart(2, '0');
-    return `${jam}:${menit}:${detik}`;
-  };
+  // =============================================================
+  // FIX 1: Ganti format jam (07:00) jadi stopwatch (MM:SS)
+  // =============================================================
+  const formatXAxisStopwatch = useCallback((millis: number) => {
+    if (isNaN(millis) || millis < 0) return "00:00";
+    const totalDetik = Math.floor(millis / 1000);
+    const menit = Math.floor(totalDetik / 60);
+    const detik = totalDetik % 60;
+    return `${menit.toString().padStart(2, "0")}:${detik.toString().padStart(2, "0")}`;
+  }, []);
+
+  // =============================================================
+  // FIX 2: Hitung domain manual biar gak "kegencet"
+  // =============================================================
+  const xDomain = useMemo<[number, number] | [string, string]>(() => {
+    if (data.length > 1) {
+      // Ambil timestamp data PERTAMA (paling lama)
+      const xMin = data[0].timestamp; 
+      // Ambil timestamp data TERAKHIR (paling baru)
+      const xMax = data[data.length - 1].timestamp; 
+      // Paksa domain chart-nya selebar data
+      return [xMin, xMax];
+    }
+    return ['auto', 'auto']; // Fallback kalau data kosong
+  }, [data]);
+
 
   return (
-    // Layering background dan chart (Ini udah bener)
     <div 
       className="w-full h-72 bg-black/60 rounded-lg p-3 border border-green-700/30 mb-4 relative overflow-hidden" 
     >
@@ -81,22 +87,24 @@ export default function ECGChart({ data, title, yAxisMode }: Props) {
         </div>
 
         <ResponsiveContainer width="100%" height="85%">
-          <LineChart data={data}> {/* <-- GANTI: Langsung pakai 'data' */}
+          <LineChart data={data}>
             
             <CartesianGrid stroke="#555" strokeDasharray="5 5" strokeOpacity={0.3} /> 
             
-            {/* ================= PERBAIKAN DI SINI ================= */}
+            {/* ============================================================= */}
+            {/* TERAPKAN SEMUA FIX DI SINI */}
+            {/* ============================================================= */}
             <XAxis 
-              dataKey="timestamp" // <-- GANTI: Pakai 'timestamp'
-              type="number"       // <-- Tipe data-nya 'number'
-              domain={['dataMin', 'dataMax']} // <-- Domain otomatis
-              tickFormatter={formatXAxis}     // <-- Format jadi jam
+              dataKey="timestamp"
+              type="number"
+              domain={xDomain} // <-- FIX 2 (Anti-kegencet)
+              allowDataOverflow={true} // <-- FIX 2 (Anti-kegencet)
+              tickFormatter={formatXAxisStopwatch} // <-- FIX 1 (Stopwatch)
               tick={{ fill: "#9ae6b4", fontSize: 11 }}
               axisLine={{ stroke: "#9ae6b4" }}
               tickLine={{ stroke: "#9ae6b4" }}
               height={25}
             /> 
-            {/* ================= AKHIR PERBAIKAN ================= */}
 
             <YAxis
               domain={yDomain} 
@@ -110,15 +118,15 @@ export default function ECGChart({ data, title, yAxisMode }: Props) {
               itemStyle={{ color: "#9ae6b4" }}
               labelStyle={{ color: "#fff" }}
               formatter={(value: number) => [value, "ADC"]}
-              labelFormatter={formatXAxis} // <-- Format jam di tooltip juga
+              labelFormatter={formatXAxisStopwatch} // <-- FIX 1 (Stopwatch)
             />
             <Line
               isAnimationActive={false} 
               dot={false}
-              dataKey="value" // <-- Data Y tetap 'value'
+              dataKey="value"
               stroke="#00ff7f" // Warna hijau neon
               strokeWidth={1.6}
-              type="monotone"
+              type="linear" // <-- FIX 3 (Anti-patah-patah)
             />
           </LineChart>
         </ResponsiveContainer>

@@ -28,7 +28,9 @@ type Patient = { key: string; nama: string; umur: number; jenis_kelamin: string;
 type ECGDataPoint = { timestamp: number; value: number; };
 interface AllLeadsData { [patientKey: string]: { lead1: ECGDataPoint[]; lead2: ECGDataPoint[]; lead3: ECGDataPoint[]; }; }
 
-const MAX_POINTS_PER_CHART = 500;
+// Tampilkan 300 data point terakhir (sekitar 3-4 detik data 250Hz)
+// Kamu bisa kecilin (misal 150) kalau masih kerasa berat
+const MAX_POINTS_PER_CHART = 300; 
 
 // =============================================================
 // Komponen Internal: Berisi semua logika utama halaman
@@ -54,12 +56,23 @@ function PatientPageContent() {
   const mqttClientRef = useRef<MqttClient | null>(null);
   const activeRecordRef = useRef<{ [key: string]: { id: string | null, startTime: number | null } }>({});
   const messageCallbackRef = useRef<((topic: string, message: Buffer, packet: IPublishPacket) => void) | null>(null);
+  
+  // 1. "Ember" / Buffer untuk data
+  const dataBufferRef = useRef<AllLeadsData>({});
 
   // --- States untuk Modal ---
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [currentPatient, setCurrentPatient] = useState<Patient | null>(null);
+
+  // 2. Fungsi Helper (Fix: Ngebaca startMillis dan sampleInterval)
+  const mapToPoints = (arr: number[], baseTimestamp: number, interval: number): ECGDataPoint[] => {
+      return arr.map((val, i) => ({ 
+          timestamp: baseTimestamp + (i * interval), // Gunakan interval dari payload
+          value: val 
+      }));
+  };
 
   // --- Hooks ---
 
@@ -86,95 +99,86 @@ function PatientPageContent() {
     return () => unsub();
   }, [isAuthenticated]);
 
-  // 3. useEffect untuk MEMPERBARUI callback ref
+  // 3. useEffect Callback MQTT (Isi "Ember" + Error Fix)
   useEffect(() => {
       messageCallbackRef.current = (topic, message, packet) => {
           const parts = topic.split('/');
           const patientId = parts[1];
           if (!patientId) return;
+          
           const messageString = message.toString();
-          try {
-              const payload = JSON.parse(messageString);
-              if (topic.includes("/realtime")) {
+
+          if (topic.includes("/realtime")) {
+              try {
+                  const payload = JSON.parse(messageString);
+
+                  // BACA KEY BARU DARI ESP32
+                  const startMillis = payload.startMillis;
+                  const sampleInterval = payload.sampleIntervalMs;
+
+                  // Validasi payload
+                  if (startMillis === undefined || sampleInterval === undefined) {
+                    console.warn("Payload MQTT tidak lengkap, skip.", payload);
+                    return;
+                  }
                   
-                  const deviceTimestamp = payload.timestamp || Date.now();
-                  
-                  setLastDeviceActivity(prev => ({ ...prev, [patientId]: Date.now() })); // Selalu pakai waktu server untuk "last activity"
+                  setLastDeviceActivity(prev => ({ ...prev, [patientId]: Date.now() })); 
                   if (payload.bpm !== undefined) setLiveBPM(prev => ({ ...prev, [patientId]: payload.bpm }));
                   
                   const { lead1 = [], lead2 = [], lead3 = [] } = payload;
                   
-                  // Logic untuk update chart (tampilan live)
-                  setLiveEcgData(prev => {
-                      const current = prev[patientId] || { lead1: [], lead2: [], lead3: [] };
-                      // NOTE: Asumsi 'lead1' dll adalah array angka, dan 'deviceTimestamp' adalah timestamp untuk AWAL array itu.
-                      // Jika 'lead1' cuma 1 angka, logic mapToPoints harus diubah.
-                      const mapToPoints = (arr: number[]): ECGDataPoint[] => arr.map((val, i) => ({ 
-                          timestamp: deviceTimestamp + (i * 4), // Asumsi interval 4ms (250Hz) antar data point di dalam array
-                          value: val 
-                      }));
-                      
-                      return {
-                          ...prev, [patientId]: {
-                              lead1: [...current.lead1, ...mapToPoints(lead1)].slice(-MAX_POINTS_PER_CHART),
-                              lead2: [...current.lead2, ...mapToPoints(lead2)].slice(-MAX_POINTS_PER_CHART),
-                              lead3: [...current.lead3, ...mapToPoints(lead3)].slice(-MAX_POINTS_PER_CHART),
-                          }
-                      };
-                  });
+                  // Masukkan data ke "ember" (buffer)
+                  if (!dataBufferRef.current[patientId]) {
+                      dataBufferRef.current[patientId] = { lead1: [], lead2: [], lead3: [] };
+                  }
                   
-                  // ===============================================
-                  // DIEDIT: Logic untuk Merekam ke Database (Kembali ke Frontend)
-                  // ===============================================
+                  // Kirim 'startMillis' dan 'sampleInterval' ke mapToPoints
+                  dataBufferRef.current[patientId].lead1.push(...mapToPoints(lead1, startMillis, sampleInterval));
+                  dataBufferRef.current[patientId].lead2.push(...mapToPoints(lead2, startMillis, sampleInterval));
+                  dataBufferRef.current[patientId].lead3.push(...mapToPoints(lead3, startMillis, sampleInterval));
+
+                  // Logic rekam ke Firebase
                   if (recordingStatus[patientId]) {
                       const currentRecord = activeRecordRef.current[patientId];
-                      // Cek apakah ada record aktif di ref lokal
                       if (currentRecord?.id && rtdb) {
-                          
-                          // Kita pakai timestamp dari device sebagai key
-                          const recordDataRef = ref(rtdb, `ecg/records/${currentRecord.id}/data/${deviceTimestamp}`);
-                          
-                          // Simpan data mentah-nya
-                          set(recordDataRef, { 
-                              lead1: lead1, 
-                              lead2: lead2, 
-                              lead3: lead3 
-                          })
+                          const recordDataRef = ref(rtdb, `ecg/records/${currentRecord.id}/data/${startMillis}`);
+                          set(recordDataRef, { lead1, lead2, lead3, interval: sampleInterval })
                               .catch(err => console.error("Firebase write error:", err));
                       }
                   }
-                  // ===============================================
-                  // AKHIR BLOK EDIT
-                  // ===============================================
 
-              } else if (topic.includes("/status")) {
-                  if (payload.lastSeen && rtdb) {
-                      set(ref(rtdb, `devices/${patientId}/lastSeen`), payload.lastSeen);
-                      setLastDeviceActivity(prev => ({ ...prev, [patientId]: payload.lastSeen }));
-                  }
+              } catch (e) {
+                  console.error("Gagal parse JSON dari /realtime:", e, messageString);
               }
-          } catch (e) {
-              if (topic.includes("/status") && messageString.toLowerCase() === 'offline') {
-                  console.warn(`Device ${patientId} LWT 'offline'.`);
+
+          } else if (topic.includes("/status")) {
+              const status = messageString.toLowerCase();
+              if (status === 'offline') {
                   setLastDeviceActivity(prev => ({ ...prev, [patientId]: 0 }));
               } else {
-                  console.error("Gagal parse MQTT message:", e, messageString);
+                  setLastDeviceActivity(prev => ({ ...prev, [patientId]: Date.now() }));
               }
+              try {
+                 const payload = JSON.parse(messageString);
+                 if (payload.lastSeen && rtdb) {
+                      set(ref(rtdb, `devices/${patientId}/lastSeen`), payload.lastSeen);
+                      setLastDeviceActivity(prev => ({ ...prev, [patientId]: payload.lastSeen }));
+                 }
+              } catch (e) { /* Bukan JSON, tidak masalah */ }
           }
       };
-  }, [recordingStatus]); // <-- Ini penting, agar callback selalu dapat `recordingStatus` terbaru
+  }, [recordingStatus]); 
 
   // 4. useEffect untuk KONEKSI MQTT
   useEffect(() => {
       if (!isAuthenticated || mqttClientRef.current) return;
-      // Ambil URL broker dari environment variable
       const brokerUrl = process.env.NEXT_PUBLIC_MQTT_BROKER_URL || "wss://broker.emqx.io:8084/mqtt";
       const client: MqttClient = mqtt.connect(brokerUrl);
       
       mqttClientRef.current = client;
       client.on("connect", () => {
           console.log("MQTT Terhubung!");
-          client.subscribe("ecg/+/realtime", { qos: 0 });
+          client.subscribe("ecg/+/realtime", { qos: 0 }); // QoS 0 untuk kecepatan
           client.subscribe("devices/+/status", { qos: 1 });
       });
       const handleMessage = (topic: string, message: Buffer, packet: IPublishPacket) => {
@@ -194,20 +198,47 @@ function PatientPageContent() {
       };
   }, [isAuthenticated]);
 
-  // --- Fungsi Handler ---
+  // 5. useEffect "TIMER" (Tukang Gambar Chart)
+  useEffect(() => {
+    // Update 10x per detik (100ms)
+    const UPDATE_INTERVAL_MS = 100; 
 
-  // ===============================================
-  // DIEDIT: Fungsi ini disederhanakan (Tanpa Backend Worker)
-  // ===============================================
+    const intervalId = setInterval(() => {
+      console.log("TIMER JALAN, data di ember:", dataBufferRef.current);
+      if (Object.keys(dataBufferRef.current).length === 0) {
+        return; 
+      }
+
+      const dataToRender = dataBufferRef.current;
+      dataBufferRef.current = {};
+
+      setLiveEcgData(prevData => {
+        const newData = { ...prevData }; 
+
+        for (const patientId in dataToRender) {
+          const newPoints = dataToRender[patientId];
+          const currentPoints = prevData[patientId] || { lead1: [], lead2: [], lead3: [] };
+          
+          newData[patientId] = {
+            lead1: [...currentPoints.lead1, ...newPoints.lead1].slice(-MAX_POINTS_PER_CHART),
+            lead2: [...currentPoints.lead2, ...newPoints.lead2].slice(-MAX_POINTS_PER_CHART),
+            lead3: [...currentPoints.lead3, ...newPoints.lead3].slice(-MAX_POINTS_PER_CHART),
+          };
+        }
+        return newData;
+      });
+
+    }, UPDATE_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  
+  }, []); 
+
+  // --- Fungsi Handler (Logic 100% Frontend) ---
   const handleRecordToggle = (deviceId: string, shouldRecord: boolean) => {
       if (!rtdb) return alert("Firebase RTDB Error.");
-      
-      // 1. Set React state (untuk ubah UI & memicu callback MQTT)
       setRecordingStatus(prev => ({ ...prev, [deviceId]: shouldRecord }));
-      
-      // 2. Logic untuk buat/tutup 'note' rekaman
       if (shouldRecord) {
-          // START RECORDING
           const newRecordRef = push(ref(rtdb, `ecg/records`));
           const startTime = Date.now();
           set(newRecordRef, { 
@@ -215,16 +246,10 @@ function PatientPageContent() {
               patientId: deviceId, 
               note: `Rec Start: ${new Date(startTime).toLocaleTimeString()}` 
           });
-          // Simpan ID rekaman aktifnya di ref LOKAL
           activeRecordRef.current[deviceId] = { id: newRecordRef.key, startTime: startTime };
-
       } else {
-          // STOP RECORDING
           const stoppedRecord = activeRecordRef.current[deviceId];
-          // Hapus ID rekaman aktif dari ref LOKAL
           activeRecordRef.current[deviceId] = { id: null, startTime: null };
-          
-          // Update 'note' di rekaman yang tadi
           if (stoppedRecord?.id && stoppedRecord.startTime) {
               const noteRef = ref(rtdb, `ecg/records/${stoppedRecord.id}/note`);
               get(ref(rtdb, `ecg/records/${stoppedRecord.id}/createdAt`)).then(snap => {
@@ -234,9 +259,6 @@ function PatientPageContent() {
           }
       }
   };
-  // ===============================================
-  // AKHIR BLOK EDIT
-  // ===============================================
 
   const handleManualSave = async (deviceId: string) => {
       if (!rtdb) return alert("Firebase RTDB error.");
@@ -263,6 +285,7 @@ function PatientPageContent() {
 
   // Render Halaman Detail Pasien
   if (selectedKey && patientToShow) {
+    // TEMA BIRU
     return (
         <main className="min-h-screen bg-black text-white p-6">
             <header className="max-w-6xl mx-auto mb-6 flex justify-between items-center">
@@ -336,7 +359,6 @@ function PatientPageContent() {
                 </div>)
             )}
         </section>
-        {/* Modal-modal */}
         <AddPatientModal open={addOpen} onClose={() => setAddOpen(false)} />
         {currentPatient && (
             <>
