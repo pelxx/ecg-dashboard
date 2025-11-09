@@ -43,7 +43,7 @@ export default function DeviceStatus({ deviceId, lastActivityTimestamp }: Props)
 
   return (
     <div className="bg-gray-900/70 border border-green-800/30 rounded-lg p-4 w-full">
-      <h4 className="text-green-300 font-semibold mb-2">Device Status</h4>
+      <h4 className="text-green-400 font-semibold mb-2">Device Status</h4>
       <div className="flex items-center gap-3">
         {/* Indikator Online/Offline */}
         <div className={`w-3 h-3 rounded-full ${isOnline ? "bg-green-400 animate-pulse" : "bg-gray-600"}`}></div>

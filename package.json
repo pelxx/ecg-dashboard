@@ -9,9 +9,11 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "apexcharts": "^5.3.5",
     "chart.js": "^4.5.0",
     "firebase": "^12.3.0",
+    "heroicons": "^2.2.0",
     "mqtt": "^5.14.1",
     "next": "15.5.4",
     "react": "19.1.0",

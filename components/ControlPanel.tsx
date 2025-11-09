@@ -68,7 +68,7 @@ export default function ControlPanel({ deviceId, onRecordToggle, onManualSave }:
         className={`w-full py-2 rounded font-semibold disabled:opacity-50 ${
           isRecording 
             ? 'bg-red-600 hover:bg-red-500 text-white' // Tombol Stop
-            : 'bg-blue-600 hover:bg-blue-500 text-white' // Tombol Start
+            : 'bg-green-600 hover:bg-green-500 text-white' // Tombol Start
         }`}
       >
         {isRecording ? '■ Stop Record' : '▶ Start Record'}
