@@ -44,7 +44,7 @@ function PatientPageContent() {
 
   const mqttClientRef = useRef<MqttClient | null>(null);
   const activeRecordRef = useRef<{ [key: string]: { id: string | null, startTime: number | null } }>({});
-  const messageCallbackRef = useRef<((topic: string, message: Buffer, packet: IPublishPacket) => void) | null>(null);
+  const messageCallbackRef = useRef<((topic: string, message: Uint8Array | string, packet: IPublishPacket) => void) | null>(null);
   const dataBufferRef = useRef<AllLeadsData>({});
 
   const [addOpen, setAddOpen] = useState(false);
@@ -58,6 +58,11 @@ function PatientPageContent() {
           timestamp: baseTimestamp + (i * interval),
           value: val 
       }));
+  };
+  const decodeMqttMessage = (message: Uint8Array | string) => {
+      if (typeof message === "string") return message;
+      if (message instanceof Uint8Array) return new TextDecoder().decode(message);
+      return "";
   };
 
   // --- Hooks (Tidak ada perubahan) ---
@@ -87,13 +92,14 @@ function PatientPageContent() {
           const parts = topic.split('/');
           const patientId = parts[1];
           if (!patientId) return;
-          const messageString = message.toString();
+          const messageString = decodeMqttMessage(message);
+          if (!messageString) return;
           if (topic.includes("/realtime")) {
               try {
                   const payload = JSON.parse(messageString);
                   const startMillis = payload.startMillis;
                   const sampleInterval = payload.sampleIntervalMs;
-                  if (startMillis === undefined || sampleInterval === undefined) return;
+                  if (startMillis === undefined || sampleInterval === undefined || sampleInterval <= 0) return;
                   setLastDeviceActivity(prev => ({ ...prev, [patientId]: Date.now() })); 
                   if (payload.bpm !== undefined) setLiveBPM(prev => ({ ...prev, [patientId]: payload.bpm }));
                   const { lead1 = [], lead2 = [], lead3 = [] } = payload;
@@ -140,7 +146,7 @@ function PatientPageContent() {
           client.subscribe("ecg/+/realtime", { qos: 0 });
           client.subscribe("devices/+/status", { qos: 1 });
       });
-      const handleMessage = (topic: string, message: Buffer, packet: IPublishPacket) => {
+      const handleMessage = (topic: string, message: Uint8Array | string, packet: IPublishPacket) => {
           if (messageCallbackRef.current) {
               messageCallbackRef.current(topic, message, packet);
           }
