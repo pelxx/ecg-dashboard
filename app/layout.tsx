@@ -12,12 +12,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// PASTIKAN OBJEK METADATA SEPERTI DI BAWAH INI
 export const metadata: Metadata = {
   title: "ECG Dashboard",
   description: "Real-time ECG Monitoring Dashboard",
   icons: {
-    // Pastikan path ini menunjuk ke nama file Anda di dalam folder /public
     icon: '/logo.jpg', 
   },
 };
