@@ -23,7 +23,7 @@ type Record = {
   key: string;
   createdAt: number;
   note: string;
-  patientId: string;
+  deviceId: string;
 };
 type RawEcgData = {
   [timestamp: string]: {
@@ -34,30 +34,32 @@ type RawEcgData = {
   };
 };
 type Props = {
-  patientId: string;
+  deviceId: string;
+  canDownload: boolean;
+  canDelete: boolean;
 };
 
-export default function DataLogger({ patientId }: Props) {
+export default function DataLogger({ deviceId, canDownload, canDelete }: Props) {
   const [records, setRecords] = useState<Record[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null); 
 
   // --- useEffect (Fetch list rekaman) ---
   useEffect(() => {
-    if (!patientId) {
+    if (!deviceId) {
       setLoading(false);
       setRecords([]);
       return;
     }
     setLoading(true);
-    const recordsRef = ref(rtdb, "ecg/records");
-    const patientQuery = query(
+    const recordsRef = ref(rtdb, "records");
+    const deviceQuery = query(
       recordsRef,
-      orderByChild("patientId"),
-      equalTo(patientId)
+      orderByChild("deviceId"),
+      equalTo(deviceId)
     );
     const unsubscribe = onValue(
-      patientQuery,
+      deviceQuery,
       (snapshot) => {
         const data = snapshot.val() || {};
         const loadedRecords: Record[] = [];
@@ -77,17 +79,22 @@ export default function DataLogger({ patientId }: Props) {
       }
     );
     return () => {
-      off(patientQuery, "value", unsubscribe);
+      off(deviceQuery, "value", unsubscribe);
     };
-  }, [patientId]);
+  }, [deviceId]);
 
   // --- Logic Hapus Data ---
   const handleDelete = async (recordKey: string) => {
+    if (!canDelete) {
+      alert("Anda tidak memiliki izin untuk menghapus rekaman.");
+      return;
+    }
+
     if (!window.confirm("Yakin mau hapus data rekaman ini selamanya?")) {
       return;
     }
     try {
-      const recordRef = ref(rtdb, `ecg/records/${recordKey}`);
+      const recordRef = ref(rtdb, `records/${recordKey}`);
       await remove(recordRef);
     } catch (error) {
       console.error("Gagal hapus data:", error);
@@ -97,9 +104,14 @@ export default function DataLogger({ patientId }: Props) {
 
   // --- Logic Download CSV ---
   const handleDownload = async (record: Record) => {
+    if (!canDownload) {
+      alert("Anda tidak memiliki izin untuk download rekaman.");
+      return;
+    }
+
     setDownloading(record.key); 
     try {
-      const dataRef = ref(rtdb, `ecg/records/${record.key}/data`);
+      const dataRef = ref(rtdb, `records/${record.key}/data`);
       const snapshot = await get(dataRef);
       if (!snapshot.exists()) {
         alert("Tidak ada data EKG di dalam rekaman ini.");
@@ -108,7 +120,7 @@ export default function DataLogger({ patientId }: Props) {
       }
       const rawData: RawEcgData = snapshot.val();
       const csvContent = convertJsonToCsv(rawData);
-      const fileName = `ECG_${patientId}_${record.createdAt}.csv`;
+      const fileName = `ECG_${deviceId}_${record.createdAt}.csv`;
       triggerCsvDownload(csvContent, fileName);
     } catch (error) {
       console.error("Gagal download data:", error);
@@ -119,7 +131,7 @@ export default function DataLogger({ patientId }: Props) {
 
   // --- Helper: Fungsi Konversi JSON ke CSV ---
   const convertJsonToCsv = (data: RawEcgData): string => {
-    let csvRows = ["timestamp,lead1,lead2,lead3"]; 
+    const csvRows = ["timestamp,lead1,lead2,lead3"]; 
     const sortedTimestamps = Object.keys(data).sort((a, b) => Number(a) - Number(b));
     for (const ts of sortedTimestamps) {
       const chunk = data[ts];
@@ -190,7 +202,7 @@ export default function DataLogger({ patientId }: Props) {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleDownload(rec)}
-                      disabled={downloading === rec.key}
+                      disabled={downloading === rec.key || !canDownload}
                       className="p-2 text-sm rounded bg-green-900 text-white hover:bg-green-900 disabled:bg-gray-500"
                       aria-label="Download"
                     >
@@ -202,7 +214,7 @@ export default function DataLogger({ patientId }: Props) {
                     </button>
                     <button
                       onClick={() => handleDelete(rec.key)}
-                      disabled={downloading === rec.key}
+                      disabled={downloading === rec.key || !canDelete}
                       className="p-2 text-sm rounded bg-red-600 text-white hover:bg-red-500 disabled:opacity-50"
                       aria-label="Hapus"
                     >
@@ -220,5 +232,3 @@ export default function DataLogger({ patientId }: Props) {
     </div>
   );
 }
-
-

@@ -226,7 +226,7 @@ export default function ECGCanvasSweep({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [bufferSize, sensitivity]);
+  }, [bufferSize, sensitivity, windowMs]);
 
   return (
   <div>

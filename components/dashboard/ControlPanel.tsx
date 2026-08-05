@@ -9,9 +9,17 @@ type Props = {
   // Fungsi ini dipanggil saat tombol Start/Stop Record ditekan
   onRecordToggle: (deviceId: string, shouldRecord: boolean) => void; 
   onManualSave: (deviceId: string) => void;
+  canRecord: boolean;
+  canSaveSnapshot: boolean;
 };
 
-export default function ControlPanel({ deviceId, onRecordToggle, onManualSave }: Props) {
+export default function ControlPanel({
+  deviceId,
+  onRecordToggle,
+  onManualSave,
+  canRecord,
+  canSaveSnapshot,
+}: Props) {
   const [processing, setProcessing] = useState(false);
   // State untuk status recording, dibaca dari Firebase
   const [isRecording, setIsRecording] = useState(false);
@@ -30,6 +38,11 @@ export default function ControlPanel({ deviceId, onRecordToggle, onManualSave }:
 
   // Handler untuk tombol Start/Stop Record
   const handleRecordToggle = async () => {
+    if (!canRecord) {
+      alert("Anda tidak memiliki izin untuk merekam ECG.");
+      return;
+    }
+
     const shouldRecordNow = !isRecording; // Aksi kebalikan dari status saat ini
     setProcessing(true);
     // 1. Panggil fungsi dari parent untuk mengubah logika penyimpanan
@@ -42,6 +55,11 @@ export default function ControlPanel({ deviceId, onRecordToggle, onManualSave }:
   
   // Handler untuk Save Snapshot (tidak berubah)
   const handleSave = async () => {
+    if (!canSaveSnapshot) {
+      alert("Anda tidak memiliki izin untuk menyimpan snapshot.");
+      return;
+    }
+
     setProcessing(true);
     onManualSave(deviceId);
     setTimeout(() => setProcessing(false), 1000);
@@ -63,7 +81,7 @@ export default function ControlPanel({ deviceId, onRecordToggle, onManualSave }:
       {/* Tombol Start/Stop Record (Toggle) */}
       <button 
         onClick={handleRecordToggle} 
-        disabled={processing}
+        disabled={processing || !canRecord}
         // Ubah warna dan teks berdasarkan status isRecording
         className={`w-full py-2 rounded font-semibold disabled:opacity-50 ${
           isRecording 
@@ -75,7 +93,7 @@ export default function ControlPanel({ deviceId, onRecordToggle, onManualSave }:
       </button>
 
       {/* Tombol Save Snapshot */}
-      <button onClick={handleSave} disabled={processing || isRecording} className="py-2 rounded border border-green-700 text-green-200 hover:bg-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed">
+      <button onClick={handleSave} disabled={processing || isRecording || !canSaveSnapshot} className="py-2 rounded border border-green-700 text-green-200 hover:bg-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed">
         ⤓ Save Snapshot Now
         {isRecording && <span className="text-xs block text-gray-500">(Disabled during recording)</span>}
       </button>

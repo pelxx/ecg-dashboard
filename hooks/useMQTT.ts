@@ -7,7 +7,7 @@ const ECG_SAMPLE_RATE_HZ = 500;
 const ECG_SAMPLE_INTERVAL_MS = 1000 / ECG_SAMPLE_RATE_HZ;
 
 interface AllLeadsData {
-  [patientKey: string]: {
+  [deviceId: string]: {
     lead1: ECGDataPoint[];
     lead2: ECGDataPoint[];
     lead3: ECGDataPoint[];
@@ -28,7 +28,15 @@ const normalizeEpochMillis = (value: unknown): number | null => {
   return n < 1e11 ? n * 1000 : n;
 };
 
-const pickIntervalMs = (payload: any): number => {
+type MqttPayload = Record<string, unknown>;
+
+type UseMQTTOptions = {
+  selectedKey: string | null;
+  paperSpeed: number;
+  recordingStatus: Record<string, boolean>;
+};
+
+const pickIntervalMs = (payload: MqttPayload): number => {
   const direct =
     toFiniteNumber(payload.sampleIntervalMs) ??
     toFiniteNumber(payload.intervalMs) ??
@@ -53,19 +61,18 @@ const pickLeadArray = (raw: unknown): number[] => {
 // MAIN HOOK
 // =====================
 export const useMQTT = ({
-  patients,
-  selectedKey,
   paperSpeed,
-  recordingStatus,
-}: any) => {
+}: UseMQTTOptions) => {
   const [liveEcgData, setLiveEcgData] = useState<AllLeadsData>({});
-  const [liveBPM, setLiveBPM] = useState<any>({});
-  const [lastDeviceActivity, setLastDeviceActivity] = useState<any>({});
+  const [liveBPM, setLiveBPM] = useState<Record<string, number>>({});
+  const [lastDeviceActivity, setLastDeviceActivity] = useState<
+    Record<string, number>
+  >({});
 
   const mqttRef = useRef<MqttClient | null>(null);
   const bufferRef = useRef<AllLeadsData>({});
-  const lastTsRef = useRef<any>({});
-  const lastSeqRef = useRef<any>({});
+  const lastTsRef = useRef<Record<string, number>>({});
+  const lastSeqRef = useRef<Record<string, number>>({});
 
   // =====================
   // MONOTONIC TIMESTAMP FIX
@@ -103,23 +110,23 @@ export const useMQTT = ({
 
     client.on("connect", () => {
       console.log("MQTT CONNECTED");
-      client.subscribe("ECG_TA/ecg/+/realtime");
-      client.subscribe("ECG_TA/devices/+/status");
+      client.subscribe("ecg/+/realtime");
+      client.subscribe("devices/+/status");
     });
 
     client.on("message", (topic, message) => {
       try {
         const parts = topic.split("/");
-        if (parts.length < 4) return;
-        const deviceId = parts[2];
+        if (parts.length < 3) return;
+        const [root, deviceId, event] = parts;
         if (!deviceId) return;
 
-        const payload = JSON.parse(message.toString());
+        const payload = JSON.parse(message.toString()) as MqttPayload;
 
         // =====================
         // REALTIME ECG
         // =====================
-        if (topic.includes("realtime")) {
+        if (root === "ecg" && event === "realtime") {
           const start = normalizeEpochMillis(
             payload.startMillis ?? payload.timestamp
           );
@@ -155,11 +162,12 @@ export const useMQTT = ({
             ...mapToPoints(lead3, start, interval, `${deviceId}:lead3`)
           );
 
-          if (payload.bpm) {
-            setLiveBPM((p: any) => ({ ...p, [deviceId]: payload.bpm }));
+          const bpm = toFiniteNumber(payload.bpm);
+          if (bpm !== null) {
+            setLiveBPM((p) => ({ ...p, [deviceId]: bpm }));
           }
 
-          setLastDeviceActivity((p: any) => ({
+          setLastDeviceActivity((p) => ({
             ...p,
             [deviceId]: Date.now(),
           }));
@@ -168,8 +176,8 @@ export const useMQTT = ({
         // =====================
         // STATUS
         // =====================
-        if (topic.includes("status")) {
-          setLastDeviceActivity((p: any) => ({
+        if (root === "devices" && event === "status") {
+          setLastDeviceActivity((p) => ({
             ...p,
             [deviceId]: Date.now(),
           }));

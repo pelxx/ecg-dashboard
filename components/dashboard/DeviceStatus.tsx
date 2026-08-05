@@ -58,6 +58,7 @@ export default function DeviceStatus({ deviceId, lastActivityTimestamp }: Props)
 
       <div className="mt-3 text-sm text-gray-300">
         {/* Status streaming sekarang sama dengan status online */}
+        <div>Device ID: <span className="text-white ml-1">{deviceId}</span></div>
         <div>Streaming: <span className="text-white ml-1">{isOnline ? "Active" : "Stopped"}</span></div>
       </div>
     </div>

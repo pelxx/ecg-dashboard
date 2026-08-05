@@ -21,8 +21,8 @@ export default function LoginPage() {
       await new Promise((res) => setTimeout(res, 800));
 
       await signInWithEmailAndPassword(auth, email.trim(), password);
-      router.push("/patients");
-    } catch (err: any) {
+      router.push("/devices");
+    } catch (err: unknown) {
       console.error(err);
       setError("Email atau password salah"); // generic (AMAN)
     } finally {
