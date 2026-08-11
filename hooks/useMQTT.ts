@@ -1,239 +1,305 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import mqtt, { MqttClient } from "mqtt";
 
-type ECGDataPoint = { timestamp: number; value: number };
-const ECG_SAMPLE_RATE_HZ = 500;
-const ECG_SAMPLE_INTERVAL_MS = 1000 / ECG_SAMPLE_RATE_HZ;
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
+import {
+  ECG_SAMPLE_RATE_HZ,
+  DEFAULT_ECG_WINDOW_MS,
+} from "@/constants/ecg";
+import { MQTT_BROKER_URL, MQTT_TOPICS } from "@/constants/mqtt";
+import { CircularBuffer } from "@/components/ecg/buffer/CircularBuffer";
+import {
+  MQTTService,
+  createDefaultECGPoint,
+} from "@/services/mqtt.service";
+import type { ECGDataPoint, ECGLeadKey, ECGLeadSeries } from "@/types/ecg";
+import type { MQTTConnectionState, MQTTDeviceStatus } from "@/types/mqtt";
 
-interface AllLeadsData {
-  [deviceId: string]: {
-    lead1: ECGDataPoint[];
-    lead2: ECGDataPoint[];
-    lead3: ECGDataPoint[];
-  };
-}
+type AllLeadsData = Record<string, ECGLeadSeries>;
 
-// =====================
-// HELPER FUNCTIONS
-// =====================
-const toFiniteNumber = (value: unknown): number | null => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-};
-
-const normalizeEpochMillis = (value: unknown): number | null => {
-  const n = toFiniteNumber(value);
-  if (n === null) return null;
-  return n < 1e11 ? n * 1000 : n;
-};
-
-type MqttPayload = Record<string, unknown>;
+type DeviceBuffers = Record<ECGLeadKey, CircularBuffer<ECGDataPoint>>;
 
 type UseMQTTOptions = {
-  selectedKey: string | null;
-  paperSpeed: number;
-  recordingStatus: Record<string, boolean>;
+  readonly selectedKey?: string | null;
+  readonly paperSpeed: number;
+  readonly recordingStatus?: Readonly<Record<string, boolean>>;
 };
 
-const pickIntervalMs = (payload: MqttPayload): number => {
-  const direct =
-    toFiniteNumber(payload.sampleIntervalMs) ??
-    toFiniteNumber(payload.intervalMs) ??
-    toFiniteNumber(payload.interval);
-
-  if (direct && direct > 0) return direct;
-
-  const sr = toFiniteNumber(payload.sampleRateHz);
-  if (sr && sr > 0) return 1000 / sr;
-
-  return ECG_SAMPLE_INTERVAL_MS;
+const emptySeries: ECGLeadSeries = {
+  lead1: [],
+  lead2: [],
+  lead3: [],
 };
 
-const pickLeadArray = (raw: unknown): number[] => {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((v) => toFiniteNumber(v))
-    .filter((v): v is number => v !== null);
+const createDeviceBuffers = (capacity: number): DeviceBuffers => ({
+  lead1: CircularBuffer.create(capacity, createDefaultECGPoint()),
+  lead2: CircularBuffer.create(capacity, createDefaultECGPoint()),
+  lead3: CircularBuffer.create(capacity, createDefaultECGPoint()),
+});
+
+const mapToPoints = (
+  samples: readonly number[],
+  startMillis: number,
+  intervalMs: number,
+  key: string,
+  lastTimestampRef: MutableRefObject<Record<string, number>>
+): readonly ECGDataPoint[] => {
+  let firstTimestamp = startMillis;
+  const lastTimestamp = lastTimestampRef.current[key];
+
+  if (lastTimestamp !== undefined && firstTimestamp <= lastTimestamp) {
+    firstTimestamp = lastTimestamp + intervalMs;
+  }
+
+  return samples.map((value, index) => {
+    const timestamp = firstTimestamp + index * intervalMs;
+    lastTimestampRef.current[key] = timestamp;
+    return { timestamp, value };
+  });
 };
 
-// =====================
-// MAIN HOOK
-// =====================
-export const useMQTT = ({
-  paperSpeed,
-}: UseMQTTOptions) => {
+const initialConnectionState: MQTTConnectionState = {
+  status: "idle",
+  connected: false,
+  error: null,
+};
+
+export const useMQTT = ({ paperSpeed,recordingStatus }: UseMQTTOptions) => {
   const [liveEcgData, setLiveEcgData] = useState<AllLeadsData>({});
   const [liveBPM, setLiveBPM] = useState<Record<string, number>>({});
-  const [lastDeviceActivity, setLastDeviceActivity] = useState<
-    Record<string, number>
+  const [lastDeviceActivity, setLastDeviceActivity] = useState<Record<string, number>>(
+    {}
+  );
+  const [connectionState, setConnectionState] =
+    useState<MQTTConnectionState>(initialConnectionState);
+  const [deviceStatuses, setDeviceStatuses] = useState<
+    Record<string, MQTTDeviceStatus>
   >({});
+  const [invalidPayloadCount, setInvalidPayloadCount] = useState(0);
 
-  const mqttRef = useRef<MqttClient | null>(null);
-  const bufferRef = useRef<AllLeadsData>({});
-  const lastTsRef = useRef<Record<string, number>>({});
-  const lastSeqRef = useRef<Record<string, number>>({});
-
-  // =====================
-  // MONOTONIC TIMESTAMP FIX
-  // =====================
-  const mapToPoints = (
-    arr: number[],
-    start: number,
-    interval: number,
-    key: string
-  ): ECGDataPoint[] => {
-    let ts = start;
-    const last = lastTsRef.current[key];
-
-    if (last !== undefined && ts <= last) {
-      ts = last + interval;
+  const serviceRef = useRef<MQTTService | null>(null);
+  const buffersRef = useRef<Record<string, DeviceBuffers>>({});
+  const recordingBuffersRef = useRef<
+  Record<
+    string,
+    {
+      startTime: number;
+      lead1: ECGDataPoint[];
+      lead2: ECGDataPoint[];
+      lead3: ECGDataPoint[];
     }
+  >
+>({});
+const recordingStatusRef = useRef<
+  Readonly<Record<string, boolean>>
+>({});
+  const lastTimestampRef = useRef<Record<string, number>>({});
+  const lastSequenceRef = useRef<Record<string, number>>({});
+  const capacityRef = useRef(
+    Math.ceil((DEFAULT_ECG_WINDOW_MS / 1000) * ECG_SAMPLE_RATE_HZ)
+  );
 
-    return arr.map((v, i) => {
-      const cur = ts + i * interval;
-      lastTsRef.current[key] = cur;
-      return { timestamp: cur, value: v };
-    });
-  };
-
-  // =====================
-  // MQTT CONNECT
-  // =====================
   useEffect(() => {
-    const client = mqtt.connect(
-      process.env.NEXT_PUBLIC_MQTT_BROKER_URL ||
-        "wss://broker.emqx.io:8084/mqtt"
+    capacityRef.current = Math.max(
+      ECG_SAMPLE_RATE_HZ,
+      Math.ceil((paperSpeed / 1000) * ECG_SAMPLE_RATE_HZ)
     );
+  }, [paperSpeed]);
 
-    mqttRef.current = client;
+  useEffect(() => {
+  recordingStatusRef.current = recordingStatus ?? {};
+}, [recordingStatus]);
 
-    client.on("connect", () => {
-      console.log("MQTT CONNECTED");
-      client.subscribe("ecg/+/realtime");
-      client.subscribe("devices/+/status");
-    });
+  useEffect(() => {
+    const service = new MQTTService();
+    serviceRef.current = service;
 
-    client.on("message", (topic, message) => {
-      try {
-        const parts = topic.split("/");
-        if (parts.length < 3) return;
-        const [root, deviceId, event] = parts;
-        if (!deviceId) return;
+    service.connect({
+      brokerUrl: MQTT_BROKER_URL,
+      topics: MQTT_TOPICS,
+      onConnectionChange: setConnectionState,
+      onMessage: (event) => {
+        if (event.type === "invalid") {
+          setInvalidPayloadCount((count) => count + 1);
+          return;
+        }
 
-        const payload = JSON.parse(message.toString()) as MqttPayload;
+        if (event.type === "status") {
+          setDeviceStatuses((previous) => ({
+            ...previous,
+            [event.status.deviceId]: event.status,
+          }));
+          setLastDeviceActivity((previous) => ({
+            ...previous,
+            [event.status.deviceId]: event.status.lastSeen,
+          }));
+          return;
+        }
 
-        // =====================
-        // REALTIME ECG
-        // =====================
-        if (root === "ecg" && event === "realtime") {
-          const start = normalizeEpochMillis(
-            payload.startMillis ?? payload.timestamp
+        const { packet } = event;
+        const lastSequence = lastSequenceRef.current[packet.deviceId];
+        if (
+          packet.chunkSeq !== null &&
+          lastSequence !== undefined &&
+          packet.chunkSeq <= lastSequence
+        ) {
+          return;
+        }
+
+        if (packet.chunkSeq !== null) {
+          lastSequenceRef.current[packet.deviceId] = packet.chunkSeq;
+        }
+
+        if (!buffersRef.current[packet.deviceId]) {
+          buffersRef.current[packet.deviceId] = createDeviceBuffers(
+            capacityRef.current
           );
-          const interval = pickIntervalMs(payload);
-          const seq = toFiniteNumber(payload.chunkSeq);
+        }
 
-          if (!start) return;
+        const buffers = buffersRef.current[packet.deviceId];
+        const lead1Points = mapToPoints(
+  packet.lead1,
+  packet.startMillis,
+  packet.sampleIntervalMs,
+  `${packet.deviceId}:lead1`,
+  lastTimestampRef
+);
 
-          // ==== ANTI DUPLICATE CHUNK ====
-          const lastSeq = lastSeqRef.current[deviceId];
-          if (seq !== null && lastSeq !== undefined && seq <= lastSeq) return;
-          if (seq !== null) lastSeqRef.current[deviceId] = seq;
+const lead2Points = mapToPoints(
+  packet.lead2,
+  packet.startMillis,
+  packet.sampleIntervalMs,
+  `${packet.deviceId}:lead2`,
+  lastTimestampRef
+);
 
-          const lead1 = pickLeadArray(payload.lead1);
-          const lead2 = pickLeadArray(payload.lead2);
-          const lead3 = pickLeadArray(payload.lead3);
+const lead3Points = mapToPoints(
+  packet.lead3,
+  packet.startMillis,
+  packet.sampleIntervalMs,
+  `${packet.deviceId}:lead3`,
+  lastTimestampRef
+);
+       buffers.lead1.pushChunk(lead1Points);
+buffers.lead2.pushChunk(lead2Points);
+buffers.lead3.pushChunk(lead3Points);
 
-          if (!bufferRef.current[deviceId]) {
-            bufferRef.current[deviceId] = {
-              lead1: [],
-              lead2: [],
-              lead3: [],
-            };
-          }
+if (recordingStatusRef.current[packet.deviceId]) {
 
-          bufferRef.current[deviceId].lead1.push(
-            ...mapToPoints(lead1, start, interval, `${deviceId}:lead1`)
-          );
-          bufferRef.current[deviceId].lead2.push(
-            ...mapToPoints(lead2, start, interval, `${deviceId}:lead2`)
-          );
-          bufferRef.current[deviceId].lead3.push(
-            ...mapToPoints(lead3, start, interval, `${deviceId}:lead3`)
-          );
+  if (!recordingBuffersRef.current[packet.deviceId]) {
+    recordingBuffersRef.current[packet.deviceId] = {
+      startTime: packet.startMillis,
+      lead1: [],
+      lead2: [],
+      lead3: [],
+    };
+  }
 
-          const bpm = toFiniteNumber(payload.bpm);
-          if (bpm !== null) {
-            setLiveBPM((p) => ({ ...p, [deviceId]: bpm }));
-          }
+  const record = recordingBuffersRef.current[packet.deviceId]!;
 
-          setLastDeviceActivity((p) => ({
-            ...p,
-            [deviceId]: Date.now(),
+  record.lead1.push(...lead1Points);
+  record.lead2.push(...lead2Points);
+  record.lead3.push(...lead3Points);
+  console.log(
+  "[Recording]",
+  packet.deviceId,
+  record.lead1.length
+);
+}
+
+        if (packet.bpm !== null) {
+          setLiveBPM((previous) => ({
+            ...previous,
+            [packet.deviceId]: packet.bpm ?? 0,
           }));
         }
 
-        // =====================
-        // STATUS
-        // =====================
-        if (root === "devices" && event === "status") {
-          setLastDeviceActivity((p) => ({
-            ...p,
-            [deviceId]: Date.now(),
-          }));
-        }
-      } catch (e) {
-        console.error("MQTT PARSE ERROR", e);
-      }
+        setLastDeviceActivity((previous) => ({
+          ...previous,
+          [packet.deviceId]: packet.receivedAt,
+        }));
+      },
     });
 
     return () => {
-      client.end();
+      service.cleanup();
+      serviceRef.current = null;
     };
   }, []);
 
-  // =====================
-  // BUFFER → STATE
-  // =====================
   useEffect(() => {
-    const interval = setInterval(() => {
-      setLiveEcgData((prev) => {
-        const newData: AllLeadsData = { ...prev };
+    const timer = window.setInterval(() => {
+      setLiveEcgData(() => {
+        const nextData: AllLeadsData = {};
 
-        for (const id in bufferRef.current) {
-          const buf = bufferRef.current[id];
-          const prevData = prev[id] || {
-            lead1: [],
-            lead2: [],
-            lead3: [],
+        for (const [deviceId, buffers] of Object.entries(buffersRef.current)) {
+          nextData[deviceId] = {
+            lead1: buffers.lead1.snapshot(),
+            lead2: buffers.lead2.snapshot(),
+            lead3: buffers.lead3.snapshot(),
           };
-
-          const maxPoints = Math.max(
-            ECG_SAMPLE_RATE_HZ,
-            Math.ceil((paperSpeed / 1000) * ECG_SAMPLE_RATE_HZ)
-          );
-
-          newData[id] = {
-            lead1: [...prevData.lead1, ...buf.lead1].slice(-maxPoints),
-            lead2: [...prevData.lead2, ...buf.lead2].slice(-maxPoints),
-            lead3: [...prevData.lead3, ...buf.lead3].slice(-maxPoints),
-          };
-
-          buf.lead1.length = 0;
-          buf.lead2.length = 0;
-          buf.lead3.length = 0;
         }
 
-        return newData;
+        return nextData;
       });
-    }, 40);
+    }, 100);
 
-    return () => clearInterval(interval);
-  }, [paperSpeed]);
+    return () => window.clearInterval(timer);
+  }, []);
 
+  const clearBuffer = useCallback((deviceId?: string) => {
+    const targetIds = deviceId ? [deviceId] : Object.keys(buffersRef.current);
+
+    for (const targetId of targetIds) {
+      buffersRef.current[targetId]?.lead1.clear();
+      buffersRef.current[targetId]?.lead2.clear();
+      buffersRef.current[targetId]?.lead3.clear();
+    }
+
+    setLiveEcgData((previous) => {
+      if (!deviceId) return {};
+      return { ...previous, [deviceId]: emptySeries };
+    });
+  }, []);
+
+  const reconnectMQTT = useCallback(() => {
+    serviceRef.current?.reconnect();
+  }, []);
+
+  const publish = useCallback((topic: string, payload: unknown) => {
+    serviceRef.current?.publish(topic, payload);
+  }, []);
+  const getBufferSnapshot = useCallback((deviceId: string) => {
+  const buffers = buffersRef.current[deviceId];
+
+  if (!buffers) {
+    return null;
+  }
+
+  return {
+    lead1: buffers.lead1.snapshot(),
+    lead2: buffers.lead2.snapshot(),
+    lead3: buffers.lead3.snapshot(),
+  };
+}, []);
+const getRecordingBuffer = useCallback((deviceId: string) => {
+  return recordingBuffersRef.current[deviceId] ?? null;
+}, []);
+
+const clearRecordingBuffer = useCallback((deviceId: string) => {
+  delete recordingBuffersRef.current[deviceId];
+}, []);
   return {
     liveEcgData,
     liveBPM,
     lastDeviceActivity,
+    connectionState,
+    deviceStatuses,
+    invalidPayloadCount,
+    clearBuffer,
+    reconnectMQTT,
+    publish,
+    getBufferSnapshot,
+    getRecordingBuffer,
+    clearRecordingBuffer,
   };
 };

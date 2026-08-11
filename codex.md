@@ -84,9 +84,9 @@ These features should continue working after any modification.
 Current topics
 
 ```
-ecg/{deviceId}/realtime
+ECG_TA/ecg/{deviceId}/realtime
 
-devices/{deviceId}/status
+ECG_TA/devices/{deviceId}/status
 ```
 
 DO NOT change these topics.

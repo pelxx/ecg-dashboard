@@ -2,16 +2,13 @@
 
 import ProtectedPage from "@/components/auth/ProtectedPage";
 import AppShell from "@/components/layout/AppShell";
-import PlaceholderPage from "@/components/layout/PlaceholderPage";
+import ReportsView from "@/components/reports/ReportsView";
 
 export default function ReportsPage() {
   return (
-    <ProtectedPage permission="viewReports">
+    <ProtectedPage permission="viewRecordingHistory">
       <AppShell>
-        <PlaceholderPage
-          title="Reports"
-          description="Riwayat rekaman dan export ECG yang tersedia untuk role ini."
-        />
+        <ReportsView />
       </AppShell>
     </ProtectedPage>
   );

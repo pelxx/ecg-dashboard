@@ -1,102 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { onValue, ref } from "firebase/database";
-import { rtdb } from "@/lib/firebase";
+import { subscribeDevices } from "@/services/device.service";
+import type { DeviceCard } from "@/types/device";
 
-export type DeviceAssignment = {
-  patientName: string;
-  age: number;
-  gender: string;
-  doctor?: string;
-  medicalRecord?: string;
-  room?: string;
-};
-
-export type DeviceCard = {
-  key: string;
-  deviceId: string;
-  assignment: DeviceAssignment;
-  nama: string;
-  umur: number;
-  jenis_kelamin: string;
-  status?: string;
-  lastSeen?: number;
-  isRecording?: boolean;
-  createdAt?: number;
-  updatedAt?: number;
-};
-
-type RawDevice = {
-  assignment?: Partial<DeviceAssignment>;
-  patientName?: string;
-  age?: number | string;
-  gender?: string;
-  nama?: string;
-  umur?: number | string;
-  jenis_kelamin?: string;
-  status?: string;
-  lastSeen?: number;
-  isRecording?: boolean;
-  createdAt?: number;
-  updatedAt?: number;
-};
-
-const toNumber = (value: unknown): number => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const normalizeDevice = (deviceId: string, raw: RawDevice): DeviceCard => {
-  const assignment = raw.assignment ?? {};
-  const patientName =
-    assignment.patientName ?? raw.patientName ?? raw.nama ?? "Belum ditugaskan";
-  const age = toNumber(assignment.age ?? raw.age ?? raw.umur);
-  const gender =
-    assignment.gender ?? raw.gender ?? raw.jenis_kelamin ?? "-";
-
-  return {
-    key: deviceId,
-    deviceId,
-    assignment: {
-      patientName,
-      age,
-      gender,
-      doctor: assignment.doctor,
-      medicalRecord: assignment.medicalRecord,
-      room: assignment.room,
-    },
-    nama: patientName,
-    umur: age,
-    jenis_kelamin: gender,
-    status: raw.status,
-    lastSeen: raw.lastSeen,
-    isRecording: raw.isRecording,
-    createdAt: raw.createdAt,
-    updatedAt: raw.updatedAt,
-  };
-};
+export type { DeviceCard } from "@/types/device";
 
 export const useDevices = () => {
   const [loading, setLoading] = useState(true);
-  const [devices, setDevices] = useState<DeviceCard[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [devices, setDevices] = useState<readonly DeviceCard[]>([]);
 
   useEffect(() => {
-    const node = ref(rtdb, "devices");
+    const unsubscribe = subscribeDevices(
+      (nextDevices) => {
+        setDevices(nextDevices);
+        setError(null);
+        setLoading(false);
+      },
+      (nextError) => {
+        setError(nextError.message);
+        setLoading(false);
+      }
+    );
 
-    const unsub = onValue(node, (snap) => {
-      const val = (snap.val() || {}) as Record<string, RawDevice>;
-      const arr = Object.entries(val).map(([deviceId, value]) =>
-        normalizeDevice(deviceId, value ?? {})
-      );
-
-      arr.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      setDevices(arr);
-      setLoading(false);
-    });
-
-    return () => unsub();
+    return unsubscribe;
   }, []);
 
-  return { devices, loading };
+  return { devices, loading, error };
 };

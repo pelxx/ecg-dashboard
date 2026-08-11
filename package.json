@@ -10,11 +10,12 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "date-fns": "^4.4.0",
     "dayjs": "^1.11.19",
     "firebase": "^12.3.0",
     "heroicons": "^2.2.0",
     "mqtt": "^5.14.1",
-    "next": "^15.5.19",
+    "next": "^16.3.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "uplot": "^1.6.32"
