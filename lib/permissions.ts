@@ -18,8 +18,7 @@ export type PermissionKey =
   | "viewRecordingHistory"
   | "downloadRecordings"
   | "deleteRecordings"
-  | "viewReports"
-  | "accessSettings";
+  | "viewReports";
 
 export type PermissionSet = Record<PermissionKey, boolean>;
 
@@ -40,7 +39,6 @@ const doctorPermissions: PermissionSet = {
   downloadRecordings: true,
   deleteRecordings: false,
   viewReports: true,
-  accessSettings: false,
 };
 
 export const permissions: Record<UserRole, PermissionSet> = {
@@ -61,7 +59,6 @@ export const permissions: Record<UserRole, PermissionSet> = {
     downloadRecordings: true,
     deleteRecordings: true,
     viewReports: true,
-    accessSettings: true,
   },
   doctor: doctorPermissions,
   nurse: {
@@ -93,5 +90,4 @@ export const navigationItems: NavigationItem[] = [
   { href: "/devices", label: "Devices", permission: "viewDevices" },
   { href: "/users", label: "Users", permission: "manageUsers" },
   { href: "/reports", label: "Reports", permission: "viewReports" },
-  { href: "/settings", label: "Settings", permission: "accessSettings" },
 ];
