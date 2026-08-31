@@ -1,6 +1,11 @@
 "use client";
+
 import { useState, useEffect } from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  setPersistence,
+  browserSessionPersistence,
+} from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 
@@ -17,20 +22,25 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // delay dikit (anti brute force)
       await new Promise((res) => setTimeout(res, 800));
 
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      await setPersistence(auth, browserSessionPersistence);
+
+      await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
+      );
+
       router.push("/devices");
     } catch (err: unknown) {
       console.error(err);
-      setError("Email atau password salah"); // generic (AMAN)
+      setError("Email atau password salah");
     } finally {
       setLoading(false);
     }
   };
 
-  // auto clear error
   useEffect(() => {
     if (error) {
       const timer = setTimeout(() => setError(""), 3000);
@@ -45,7 +55,10 @@ export default function LoginPage() {
         className="bg-gray-900 p-8 rounded-xl w-full max-w-sm shadow-2xl border border-gray-800"
       >
         <h1 className="text-2xl font-bold text-center">Login</h1>
-        <p className="text-center text-gray-400 mb-6">ECG Dashboard</p>
+
+        <p className="text-center text-gray-400 mb-6">
+          ECG Dashboard
+        </p>
 
         {error && (
           <div className="bg-red-500/10 border border-red-500/40 text-red-400 text-sm px-3 py-2 rounded-md mb-4">
