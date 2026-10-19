@@ -1,18 +1,42 @@
 @import "tailwindcss";
 @import "uplot/dist/uPlot.min.css";
 
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+
+  --background: #F3F6FA;
+  --foreground: #172B4D;
+
+  --surface: #FFFFFF;
+  --surface-secondary: #E8EDF4;
+  --border: #DCE3EC;
+
+  --text-secondary: #64748B;
+
+  --primary: #2563EB;
+  --success: #16A34A;
+  --warning: #D97706;
+  --danger: #DC2626;
 }
 
+.dark {
+  color-scheme: dark;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #0B1220;
+  --foreground: #F1F5F9;
+
+  --surface: #151F30;
+  --surface-secondary: #111827;
+  --border: #2B394D;
+
+  --text-secondary: #94A3B8;
+
+  --primary: #60A5FA;
+  --success: #4ADE80;
+  --warning: #FBBF24;
+  --danger: #F87171;
 }
 
 body {
@@ -23,6 +47,27 @@ body {
 
 @layer components {
   .field-input {
-    @apply w-full rounded border border-emerald-800/30 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-500 disabled:cursor-not-allowed;
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--surface-secondary);
+    color: var(--foreground);
+    padding: 0.5rem 0.75rem;
+    outline: none;
+    transition: border-color 200ms, background-color 200ms;
+  }
+
+  .field-input::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.8;
+  }
+
+  .field-input:focus {
+    border-color: var(--primary);
+  }
+
+  .field-input:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
   }
 }

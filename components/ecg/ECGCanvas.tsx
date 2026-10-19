@@ -2,7 +2,6 @@
 
 import { memo, useEffect, useRef } from "react";
 import {
-  ADC_HALF_RANGE,
   DEFAULT_ECG_WINDOW_MS,
   ECG_SAMPLE_RATE_HZ,
 } from "@/constants/ecg";
@@ -26,6 +25,16 @@ const gainForSensitivity = (sensitivity: ECGSensitivity): number => {
   return 1;
 };
 
+const STANDARD_Y_MIN_MV = -4;
+const STANDARD_Y_MAX_MV = 4;
+const STANDARD_Y_TICKS_MV = [-4, -2, 0, 2, 4] as const;
+
+type YAxisScale = {
+  readonly minMv: number;
+  readonly maxMv: number;
+  readonly ticks: readonly number[];
+};
+
 const ECGCanvas = memo(function ECGCanvas({
   data,
   title,
@@ -47,6 +56,7 @@ const ECGCanvas = memo(function ECGCanvas({
     autoScale,
     frozen,
     showGrid,
+    isDark:true
   });
 
   useEffect(() => {
@@ -61,8 +71,25 @@ const ECGCanvas = memo(function ECGCanvas({
       autoScale,
       frozen,
       showGrid,
+      isDark: document.documentElement.classList.contains("dark"),
     };
   }, [autoScale, frozen, sampleRateHz, sensitivity, showGrid, windowMs]);
+
+  useEffect(() => {
+  const observer = new MutationObserver(() => {
+    propsRef.current = {
+      ...propsRef.current,
+      isDark: document.documentElement.classList.contains("dark"),
+    };
+  });
+
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
+  });
+
+  return () => observer.disconnect();
+}, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -104,16 +131,21 @@ const ECGCanvas = memo(function ECGCanvas({
     };
   }, []);
 
-  return (
-    <div className="rounded-lg border border-emerald-900/40 bg-black/70 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-sm font-semibold text-emerald-300">{title}</p>
-        <p className="text-xs text-slate-500">
+     return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 transition-colors duration-200">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-[var(--success)]">
+          {title}
+        </p>
+        <p className="text-xs text-[var(--text-secondary)]">
           {sampleRateHz} Hz / {(windowMs / 1000).toFixed(1)}s
         </p>
       </div>
       <div ref={containerRef} className="h-56 w-full md:h-64">
-        <canvas ref={canvasRef} className="block rounded bg-black" />
+        <canvas
+          ref={canvasRef}
+          className="block rounded"
+        />
       </div>
     </div>
   );
@@ -130,6 +162,7 @@ function drawECG(
     readonly autoScale: boolean;
     readonly frozen: boolean;
     readonly showGrid: boolean;
+    readonly isDark: boolean;
   }
 ) {
   const width = canvas.width;
@@ -141,17 +174,17 @@ function drawECG(
   const bottom = 34 * dpr;
   const plotWidth = width - left - right;
   const plotHeight = height - top - bottom;
-  const centerY = top + plotHeight / 2;
-  const amplitude = plotHeight * 0.42;
 
-  context.fillStyle = "#050806";
+  context.fillStyle = options.isDark ? "#050806" : "#FFFFFF";
   context.fillRect(0, 0, width, height);
 
   if (options.showGrid) {
-    drawGrid(context, width, height, left, right, top, bottom, dpr);
+    drawGrid(context, width, height, left, right, top, bottom, dpr, options.isDark);
   }
 
-  context.strokeStyle = "rgba(110, 231, 183, 0.45)";
+  context.strokeStyle = options.isDark
+    ? "rgba(110, 231, 183, 0.45)"
+    : "rgba(22, 163, 74, 0.45)";
   context.lineWidth = dpr;
   context.beginPath();
   context.moveTo(left, top);
@@ -159,34 +192,26 @@ function drawECG(
   context.lineTo(width - right, height - bottom);
   context.stroke();
 
-  context.fillStyle = "#86efac";
-  context.font = `${12 * dpr}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-  context.textBaseline = "middle";
-  context.textAlign = "right";
+  const latestTimestamp = data[data.length - 1]?.timestamp ?? Date.now();
+  const startTime = latestTimestamp - options.windowMs;
+  const shouldAutoScale = options.sensitivity === "auto";
+  const yAxis = shouldAutoScale
+    ? getAutoYAxisScale(data, startTime)
+    : getFixedYAxisScale(gainForSensitivity(options.sensitivity));
 
-  for (const tick of [-1, 0, 1]) {
-    const y = centerY - tick * amplitude * 0.5;
-    context.fillText(`${tick} mV`, left - 8 * dpr, y);
-  }
+  drawYAxisLabels(context, yAxis, left, top, plotHeight, dpr, options.isDark);
 
   if (data.length === 0) {
     drawEmptyState(context, width, height, dpr);
     return;
   }
 
-  const latestTimestamp = data[data.length - 1]?.timestamp ?? Date.now();
-  const startTime = latestTimestamp - options.windowMs;
-  const gain = gainForSensitivity(options.sensitivity);
-  const scale = options.autoScale || options.sensitivity === "auto"
-    ? getAutoScale(data, startTime)
-    : gain;
-
   context.save();
   context.beginPath();
   context.rect(left, top, plotWidth, plotHeight);
   context.clip();
   context.beginPath();
-  context.strokeStyle = "#22f27a";
+  context.strokeStyle = options.isDark ? "#22f27a" : "#15803D";
   context.lineWidth = Math.max(1.4 * dpr, 1);
   context.lineJoin = "round";
   context.lineCap = "round";
@@ -198,8 +223,8 @@ function drawECG(
 
     const progress = (point.timestamp - startTime) / options.windowMs;
     const x = left + progress * plotWidth;
-    const normalized = normalizeEcgValue(point.value);
-    const y = centerY - normalized * scale * amplitude;
+    const millivolts = normalizeEcgValue(point.value);
+    const y = toCanvasY(millivolts, yAxis, top, plotHeight);
 
     if (!moved) {
       context.moveTo(x, y);
@@ -212,9 +237,26 @@ function drawECG(
 
   const cursorProgress = ((latestTimestamp % options.windowMs) / options.windowMs);
   const cursorX = left + cursorProgress * plotWidth;
-  const gradient = context.createLinearGradient(cursorX, 0, cursorX + 44 * dpr, 0);
-  gradient.addColorStop(0, "rgba(5, 8, 6, 0.92)");
-  gradient.addColorStop(1, "rgba(5, 8, 6, 0)");
+  const gradient = context.createLinearGradient(
+  cursorX,
+  0,
+  cursorX + 44 * dpr,
+  0
+);
+
+gradient.addColorStop(
+  0,
+  options.isDark
+    ? "rgba(5, 8, 6, 0.92)"
+    : "rgba(255, 255, 255, 0.92)"
+);
+
+gradient.addColorStop(
+  1,
+  options.isDark
+    ? "rgba(5, 8, 6, 0)"
+    : "rgba(255, 255, 255, 0)"
+);
   context.fillStyle = gradient;
   context.fillRect(cursorX, top, 44 * dpr, plotHeight);
   context.restore();
@@ -228,21 +270,29 @@ function drawGrid(
   right: number,
   top: number,
   bottom: number,
-  dpr: number
+  dpr: number,
+  isDark: boolean,
 ) {
-  const small = 20 * dpr;
+  // Tampilan grid ECG: kotak kecil dan besar
+  const small = 10 * dpr;
   const large = small * 5;
+
   const plotRight = width - right;
   const plotBottom = height - bottom;
 
+  // Garis grid kecil
   context.lineWidth = Math.max(0.5 * dpr, 0.5);
-  context.strokeStyle = "rgba(16, 185, 129, 0.08)";
+  context.strokeStyle = isDark
+  ? "rgba(220, 80, 100, 0.14)"
+  : "rgba(220, 80, 100, 0.22)";
+
   for (let x = left; x <= plotRight; x += small) {
     context.beginPath();
     context.moveTo(x, top);
     context.lineTo(x, plotBottom);
     context.stroke();
   }
+
   for (let y = top; y <= plotBottom; y += small) {
     context.beginPath();
     context.moveTo(left, y);
@@ -250,14 +300,19 @@ function drawGrid(
     context.stroke();
   }
 
-  context.lineWidth = Math.max(0.8 * dpr, 0.8);
-  context.strokeStyle = "rgba(16, 185, 129, 0.18)";
+  // Garis grid besar setiap 5 kotak kecil
+  context.lineWidth = Math.max(0.9 * dpr, 0.9);
+  context.strokeStyle = isDark
+  ? "rgba(220, 80, 100, 0.30)"
+  : "rgba(220, 80, 100, 0.40)";
+
   for (let x = left; x <= plotRight; x += large) {
     context.beginPath();
     context.moveTo(x, top);
     context.lineTo(x, plotBottom);
     context.stroke();
   }
+
   for (let y = top; y <= plotBottom; y += large) {
     context.beginPath();
     context.moveTo(left, y);
@@ -266,16 +321,83 @@ function drawGrid(
   }
 }
 
-function getAutoScale(data: readonly ECGDataPoint[], startTime: number): number {
-  let maxAbs = 1 / ADC_HALF_RANGE;
+
+function getFixedYAxisScale(gain: number): YAxisScale {
+  return {
+    minMv: STANDARD_Y_MIN_MV / gain,
+    maxMv: STANDARD_Y_MAX_MV / gain,
+    ticks: STANDARD_Y_TICKS_MV.map((tick) => tick / gain),
+  };
+}
+
+function getAutoYAxisScale(
+  data: readonly ECGDataPoint[],
+  startTime: number
+): YAxisScale {
+  let minMv = Number.POSITIVE_INFINITY;
+  let maxMv = Number.NEGATIVE_INFINITY;
 
   for (let index = data.length - 1; index >= 0; index -= 1) {
     const point = data[index];
     if (point.timestamp < startTime) break;
-    maxAbs = Math.max(maxAbs, Math.abs(normalizeEcgValue(point.value)));
+
+    const millivolts = normalizeEcgValue(point.value);
+    minMv = Math.min(minMv, millivolts);
+    maxMv = Math.max(maxMv, millivolts);
   }
 
-  return Math.min(4, Math.max(0.4, 0.8 / maxAbs));
+  if (!Number.isFinite(minMv) || !Number.isFinite(maxMv)) {
+    return getFixedYAxisScale(1);
+  }
+
+  const span = maxMv - minMv;
+  const padding = span > 0 ? span * 0.1 : Math.max(Math.abs(maxMv) * 0.1, 0.5);
+  const paddedMin = minMv - padding;
+  const paddedMax = maxMv + padding;
+
+  return {
+    minMv: paddedMin,
+    maxMv: paddedMax,
+    ticks: Array.from(
+      { length: 5 },
+      (_, index) => paddedMin + ((paddedMax - paddedMin) * index) / 4
+    ),
+  };
+}
+
+function toCanvasY(
+  millivolts: number,
+  yAxis: YAxisScale,
+  top: number,
+  plotHeight: number
+): number {
+  const progress = (yAxis.maxMv - millivolts) / (yAxis.maxMv - yAxis.minMv);
+  return top + progress * plotHeight;
+}
+
+function drawYAxisLabels(
+  context: CanvasRenderingContext2D,
+  yAxis: YAxisScale,
+  left: number,
+  top: number,
+  plotHeight: number,
+  dpr: number,
+  isDark: boolean
+) {
+  context.fillStyle = isDark ? "#86efac" : "#166534";
+  context.font = `${12 * dpr}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  context.textBaseline = "middle";
+  context.textAlign = "right";
+
+  for (const tick of yAxis.ticks) {
+    const y = toCanvasY(tick, yAxis, top, plotHeight);
+    context.fillText(`${formatMillivolts(tick)} mV`, left - 8 * dpr, y);
+  }
+}
+
+function formatMillivolts(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
 }
 
 function drawEmptyState(

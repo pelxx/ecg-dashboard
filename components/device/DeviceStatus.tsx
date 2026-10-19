@@ -38,7 +38,7 @@ const DeviceStatus = memo(function DeviceStatus({
     ["Streaming", streaming ? "Active" : "Stopped"],
   ] as const;
 
-  return (
+    return (
     <MedicalCard
       title="Device Status"
       action={
@@ -51,15 +51,20 @@ const DeviceStatus = memo(function DeviceStatus({
       <div className="mb-3 flex items-center gap-3">
         <span
           className={`h-3 w-3 rounded-full ${
-            online ? "bg-emerald-400 shadow-[0_0_12px_#34d399]" : "bg-slate-600"
+            online
+              ? "bg-emerald-500 shadow-[0_0_12px_#10b981] dark:bg-emerald-400 dark:shadow-[0_0_12px_#34d399]"
+              : "bg-slate-400 dark:bg-slate-600"
           }`}
         />
         <div>
-          <p className="text-sm text-slate-200">
+          <p className="text-sm text-[var(--foreground)]">
             {streaming ? "ECG stream active" : "ECG stream stopped"}
           </p>
-          <p className="text-xs text-slate-500">
-            {mqttConnected ? "MQTT broker connected" : "MQTT broker disconnected"}
+
+          <p className="text-xs text-[var(--text-secondary)]">
+            {mqttConnected
+              ? "MQTT broker connected"
+              : "MQTT broker disconnected"}
           </p>
         </div>
       </div>
@@ -67,8 +72,10 @@ const DeviceStatus = memo(function DeviceStatus({
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         {rows.map(([label, value]) => (
           <div key={label} className="contents">
-            <dt className="text-slate-500">{label}</dt>
-            <dd className="min-w-0 truncate text-right text-slate-100">{value}</dd>
+            <dt className="text-[var(--text-secondary)]">{label}</dt>
+            <dd className="min-w-0 truncate text-right text-[var(--foreground)]">
+              {value}
+            </dd>
           </div>
         ))}
       </dl>

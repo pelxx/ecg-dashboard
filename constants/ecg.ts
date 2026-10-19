@@ -1,6 +1,6 @@
 import type { ECGLeadKey, ECGLeadVisibility, ECGSensitivity } from "@/types/ecg";
 
-export const ECG_SAMPLE_RATE_HZ = 500;
+export const ECG_SAMPLE_RATE_HZ = 853.33;
 export const ECG_SAMPLE_INTERVAL_MS = 1000 / ECG_SAMPLE_RATE_HZ;
 export const DEFAULT_ECG_WINDOW_MS = 5000;
 export const ADC_CENTER = 512;

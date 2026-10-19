@@ -1,3 +1,4 @@
+
 "use client";
 
 type Props = {
@@ -7,10 +8,15 @@ type Props = {
 
 export default function PlaceholderPage({ title, description }: Props) {
   return (
-    <section className="p-6">
-      <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
-        <h1 className="text-2xl font-bold text-blue-400">{title}</h1>
-        <p className="mt-2 text-sm text-gray-400">{description}</p>
+    <section className="p-6 text-[var(--foreground)] transition-colors duration-200">
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm shadow-black/5">
+        <h1 className="text-2xl font-bold text-[var(--primary)]">
+          {title}
+        </h1>
+
+        <p className="mt-2 text-sm text-[var(--text-secondary)]">
+          {description}
+        </p>
       </div>
     </section>
   );

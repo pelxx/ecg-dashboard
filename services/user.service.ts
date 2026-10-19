@@ -1,4 +1,4 @@
-import { off, onValue, ref, update } from "firebase/database";
+import { onValue, ref, update } from "firebase/database";
 import { rtdb } from "@/lib/firebase";
 import { isUserRole, type UserRole } from "@/lib/permissions";
 
@@ -72,7 +72,7 @@ export const subscribeUsers = (
     (error) => onError?.(error)
   );
 
-  return () => off(node, "value", unsubscribe);
+  return unsubscribe;
 };
 
 export const updateUser = async (

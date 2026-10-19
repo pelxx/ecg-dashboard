@@ -5,6 +5,7 @@ import MedicalCard from "@/components/common/MedicalCard";
 import StatusBadge from "@/components/common/StatusBadge";
 import type { PatientProfile } from "@/types/patient";
 import { getBpmTone } from "@/utils/ecg";
+
 type Props = {
   readonly patient: PatientProfile;
   readonly deviceId: string;
@@ -17,10 +18,7 @@ const PatientInfo = memo(function PatientInfo({
   deviceId,
   bpm,
   isRecording,
-
 }: Props) {
-
-
   const rows = [
     ["Patient ID", patient.patientId],
     ["Device ID", deviceId],
@@ -39,8 +37,10 @@ const PatientInfo = memo(function PatientInfo({
       }
     >
       <div className="mb-4">
-        <p className="text-lg font-semibold text-white">{patient.patientName}</p>
-        <p className="font-mono text-xs text-slate-500">
+        <p className="text-lg font-semibold text-[var(--foreground)]">
+          {patient.patientName}
+        </p>
+        <p className="font-mono text-xs text-[var(--text-secondary)]">
           {patient.patientId}
         </p>
       </div>
@@ -48,18 +48,24 @@ const PatientInfo = memo(function PatientInfo({
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         {rows.map(([label, value]) => (
           <React.Fragment key={label}>
-            <dt className="text-slate-500">{label}</dt>
-            <dd className="min-w-0 truncate text-right text-slate-100">{value}</dd>
+            <dt className="text-[var(--text-secondary)]">{label}</dt>
+            <dd className="min-w-0 truncate text-right text-[var(--foreground)]">
+              {value}
+            </dd>
           </React.Fragment>
         ))}
       </dl>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 border-t border-emerald-800/30 pt-4">
+      <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--border)] pt-4">
         <div>
-          <p className="text-xs text-slate-500">Current BPM</p>
+          <p className="text-xs text-[var(--text-secondary)]">
+            Current BPM
+          </p>
           <p className={`text-4xl font-bold ${getBpmTone(bpm)}`}>
             {bpm > 0 ? bpm : "--"}
-            <span className="ml-2 text-base font-normal text-slate-400">BPM</span>
+            <span className="ml-2 text-base font-normal text-[var(--text-secondary)]">
+              BPM
+            </span>
           </p>
         </div>
       </div>

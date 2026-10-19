@@ -1,3 +1,4 @@
+
 "use client";
 
 import { memo } from "react";
@@ -39,11 +40,12 @@ const ChartSettings = memo(function ChartSettings({
           {ECG_SENSITIVITIES.map((button) => (
             <button
               key={button.value}
+              type="button"
               onClick={() => onSensitivityChange(button.value)}
-              className={`rounded px-3 py-1.5 text-xs ${
+              className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
                 settings.sensitivity === button.value
-                  ? "bg-emerald-500 text-slate-950"
-                  : "bg-slate-800 text-slate-300"
+                  ? "border-[var(--primary)] bg-[var(--primary)] text-white"
+                  : "border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--foreground)] hover:opacity-80"
               }`}
             >
               {button.label}
@@ -55,11 +57,12 @@ const ChartSettings = memo(function ChartSettings({
           {ECG_PAPER_SPEEDS.map((button) => (
             <button
               key={button.value}
+              type="button"
               onClick={() => onWindowChange(button.value)}
-              className={`rounded px-3 py-1.5 text-xs ${
+              className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
                 settings.windowMs === button.value
-                  ? "bg-emerald-500 text-slate-950"
-                  : "bg-slate-800 text-slate-300"
+                  ? "border-[var(--primary)] bg-[var(--primary)] text-white"
+                  : "border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--foreground)] hover:opacity-80"
               }`}
             >
               {button.label}
@@ -68,20 +71,33 @@ const ChartSettings = memo(function ChartSettings({
         </ControlGroup>
 
         <div className="grid grid-cols-2 gap-2">
-          <Toggle label="Auto Scale" checked={settings.autoScale} onChange={onAutoScaleChange} />
-          <Toggle label={settings.frozen ? "Resume" : "Freeze"} checked={settings.frozen} onChange={onFrozenChange} />
-          <Toggle label="Grid" checked={settings.showGrid} onChange={onGridChange} />
+          <Toggle
+            label="Auto Scale"
+            checked={settings.autoScale}
+            onChange={onAutoScaleChange}
+          />
+          <Toggle
+            label={settings.frozen ? "Resume" : "Freeze"}
+            checked={settings.frozen}
+            onChange={onFrozenChange}
+          />
+          <Toggle
+            label="Grid"
+            checked={settings.showGrid}
+            onChange={onGridChange}
+          />
         </div>
 
         <ControlGroup label="Lead Toggle">
           {ECG_LEADS.map((lead) => (
             <button
               key={lead.key}
+              type="button"
               onClick={() => onLeadToggle(lead.key)}
-              className={`rounded px-3 py-1.5 text-xs ${
+              className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
                 settings.visibleLeads[lead.key]
-                  ? "bg-emerald-500 text-slate-950"
-                  : "bg-slate-800 text-slate-400"
+                  ? "border-[var(--primary)] bg-[var(--primary)] text-white"
+                  : "border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--foreground)] hover:opacity-80"
               }`}
             >
               {lead.label}
@@ -102,7 +118,7 @@ function ControlGroup({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-sm text-slate-400">{label}</p>
+      <p className="text-sm text-[var(--text-secondary)]">{label}</p>
       <div className="flex flex-wrap gap-2">{children}</div>
     </div>
   );
@@ -118,13 +134,13 @@ function Toggle({
   readonly onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex items-center justify-between gap-2 rounded border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200">
+    <label className="flex items-center justify-between gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-secondary)] px-3 py-2 text-sm text-[var(--foreground)] transition-colors">
       <span>{label}</span>
       <input
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 accent-emerald-500"
+        className="h-4 w-4 accent-[var(--primary)]"
       />
     </label>
   );

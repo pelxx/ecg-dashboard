@@ -78,114 +78,123 @@ export default function AssignmentModal({ open, device, onClose }: Props) {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-emerald-800/40 bg-slate-950 p-5 shadow-2xl">
-        <h3 className="mb-4 text-lg font-semibold text-emerald-200">
-          {device ? "Edit Assignment" : "Create Assignment"}
-        </h3>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <Field label="Device ID">
-            <input
-              value={deviceId}
-              disabled={Boolean(device)}
-              onChange={(event) => setDeviceId(event.target.value)}
-              className="field-input disabled:opacity-60"
-              placeholder="device001"
-            />
-          </Field>
+return (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+    <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-[var(--foreground)] shadow-2xl">
+      <h3 className="mb-4 text-lg font-semibold text-[var(--foreground)]">
+        {device ? "Edit Assignment" : "Create Assignment"}
+      </h3>
 
-          <Field label="Patient ID">
-            <input
-              value={patientId}
-              onChange={(event) => setPatientId(event.target.value)}
-              className="field-input"
-              placeholder="P-001"
-            />
-          </Field>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <Field label="Device ID">
+          <input
+            value={deviceId}
+            disabled={Boolean(device)}
+            onChange={(event) => setDeviceId(event.target.value)}
+            className="field-input disabled:opacity-60"
+            placeholder="device001"
+          />
+        </Field>
 
-          <Field label="Nama">
-            <input
-              value={patientName}
-              onChange={(event) => setPatientName(event.target.value)}
-              className="field-input"
-              placeholder="Nama pasien"
-            />
-          </Field>
+        <Field label="Patient ID">
+          <input
+            value={patientId}
+            onChange={(event) => setPatientId(event.target.value)}
+            className="field-input"
+            placeholder="P-001"
+          />
+        </Field>
 
-          <Field label="Umur">
-            <input
-              type="number"
-              value={age}
-              onChange={(event) =>
-                setAge(event.target.value === "" ? "" : Number(event.target.value))
-              }
-              className="field-input"
-              placeholder="Umur"
-            />
-          </Field>
+        <Field label="Nama">
+          <input
+            value={patientName}
+            onChange={(event) => setPatientName(event.target.value)}
+            className="field-input"
+            placeholder="Nama pasien"
+          />
+        </Field>
 
-          <Field label="Jenis Kelamin">
-            <div className="flex gap-2">
-              {["Laki-laki", "Perempuan"].map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setGender(value)}
-                  className={`rounded px-3 py-2 text-sm ${
-                    gender === value
-                      ? "bg-emerald-500 text-slate-950"
-                      : "border border-emerald-800/30 bg-slate-900 text-slate-200"
-                  }`}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-          </Field>
-          
-          <Field label="Doctor">
-            <input
-              value={doctor}
-              onChange={(event) => setDoctor(event.target.value)}
-              className="field-input"
-              placeholder="Dokter"
-            />
-          </Field>
+        <Field label="Umur">
+          <input
+            type="number"
+            value={age}
+            onChange={(event) =>
+              setAge(event.target.value === "" ? "" : Number(event.target.value))
+            }
+            className="field-input"
+            placeholder="Umur"
+          />
+        </Field>
+
+        <Field label="Jenis Kelamin">
+          <div className="flex gap-2">
+            {["Laki-laki", "Perempuan"].map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setGender(value)}
+                className={`rounded-md border px-3 py-2 text-sm transition-colors ${
+                  gender === value
+                    ? "border-[var(--primary)] bg-[var(--primary)] text-white"
+                    : "border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--foreground)] hover:opacity-80"
+                }`}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label="Doctor">
+          <input
+            value={doctor}
+            onChange={(event) => setDoctor(event.target.value)}
+            className="field-input"
+            placeholder="Dokter"
+          />
+        </Field>
+      </div>
+
+      <div className="mt-5 flex justify-between gap-2">
+        <div>
+          {device && (
+            <button
+              type="button"
+              onClick={handleRemove}
+              disabled={saving}
+              className="rounded-md bg-[var(--danger)] px-4 py-2 text-white transition-opacity hover:opacity-85 disabled:opacity-50"
+            >
+              Remove
+            </button>
+          )}
         </div>
 
-        <div className="mt-5 flex justify-between gap-2">
-          <div>
-            {device && (
-              <button
-                onClick={handleRemove}
-                disabled={saving}
-                className="rounded bg-red-600 px-4 py-2 text-white disabled:opacity-50"
-              >
-                Remove
-              </button>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={onClose}
-              className="rounded border border-slate-700 bg-slate-900 px-4 py-2 text-slate-200"
-            >
-              Batal
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="rounded bg-emerald-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
-            >
-              {saving ? "Menyimpan..." : "Simpan"}
-            </button>
-          </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-[var(--border)] bg-[var(--surface-secondary)] px-4 py-2 text-sm text-[var(--foreground)] transition-colors hover:opacity-80"
+          >
+            Batal
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:opacity-50"
+          >
+            {saving ? "Menyimpan..." : "Simpan"}
+          </button>
         </div>
       </div>
     </div>
-  );
+  </div>
+);
+
 }
+
 
 function Field({
   label,
@@ -195,9 +204,12 @@ function Field({
   readonly children: React.ReactNode;
 }) {
   return (
-    <label className="block text-sm text-slate-300">
-      <span className="mb-1 block">{label}</span>
+    <label className="block text-sm text-[var(--foreground)]">
+      <span className="mb-1 block text-[var(--text-secondary)]">
+        {label}
+      </span>
       {children}
     </label>
   );
 }
+

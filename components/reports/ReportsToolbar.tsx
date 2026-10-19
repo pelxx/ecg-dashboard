@@ -29,31 +29,29 @@ export default function ReportsToolbar({
   return (
     <MedicalCard title="Reports Toolbar">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-
         <div className="grid grid-cols-2 gap-5 sm:w-auto">
           <div>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-[var(--text-secondary)]">
               Total Recordings
             </p>
 
-            <p className="text-2xl font-bold text-emerald-300">
+            <p className="text-2xl font-bold text-[var(--success)]">
               {totalReports}
             </p>
           </div>
 
           <div>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-[var(--text-secondary)]">
               Matching
             </p>
 
-            <p className="text-2xl font-bold text-emerald-300">
+            <p className="text-2xl font-bold text-[var(--success)]">
               {visibleReports}
             </p>
           </div>
         </div>
 
         <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_auto_auto]">
-
           <input
             type="text"
             value={searchTerm}
@@ -70,18 +68,10 @@ export default function ReportsToolbar({
             className="field-input"
             aria-label="Filter reports by date"
           >
-            <option value="all">
-              All
-            </option>
-            <option value="today">
-              Today
-            </option>
-            <option value="last7">
-              Last 7 Days
-            </option>
-            <option value="last30">
-              Last 30 Days
-            </option>
+            <option value="all">All</option>
+            <option value="today">Today</option>
+            <option value="last7">Last 7 Days</option>
+            <option value="last30">Last 30 Days</option>
           </select>
 
           <select
@@ -92,16 +82,10 @@ export default function ReportsToolbar({
             className="field-input"
             aria-label="Sort reports"
           >
-            <option value="newest">
-              Newest
-            </option>
-            <option value="oldest">
-              Oldest
-            </option>
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
           </select>
-
         </div>
-
       </div>
     </MedicalCard>
   );

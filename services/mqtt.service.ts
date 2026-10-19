@@ -1,4 +1,3 @@
-
 import mqtt, { type MqttClient } from "mqtt";
 import type {
   MQTTDeviceStatus,

@@ -1,6 +1,7 @@
-import { ADC_CENTER, ADC_HALF_RANGE } from "@/constants/ecg";
-
 export const toFiniteNumber = (value: unknown): number | null => {
+  if (typeof value === "boolean" || value === null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : null;
 };
@@ -13,7 +14,7 @@ export const normalizeEpochMillis = (value: unknown): number | null => {
 };
 
 export const normalizeEcgValue = (value: number): number => {
-  return Math.abs(value) <= 5 ? value : (value - ADC_CENTER) / ADC_HALF_RANGE;
+  return value;
 };
 
 export const getBpmTone = (bpm?: number | null): string => {

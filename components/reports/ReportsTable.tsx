@@ -23,22 +23,32 @@ export default function ReportsTable({
     <MedicalCard title="Recording History">
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
-          <thead className="border-b border-slate-700 text-slate-400">
+          <thead className="border-b border-[var(--border)] text-[var(--text-secondary)]">
             <tr>
-              <th className="px-4 py-3 text-left">Device ID</th>
-              <th className="px-4 py-3 text-left">Date</th>
-              <th className="px-4 py-3 text-right">Duration</th>
-              <th className="px-4 py-3 text-right">Samples</th>
-              <th className="px-4 py-3 text-center">Actions</th>
+              <th className="px-4 py-3 text-left font-medium">
+                Device ID
+              </th>
+              <th className="px-4 py-3 text-left font-medium">
+                Date
+              </th>
+              <th className="px-4 py-3 text-right font-medium">
+                Duration
+              </th>
+              <th className="px-4 py-3 text-right font-medium">
+                Samples
+              </th>
+              <th className="px-4 py-3 text-center font-medium">
+                Actions
+              </th>
             </tr>
           </thead>
 
-          <tbody>
+          <tbody className="divide-y divide-[var(--border)]">
             {reports.length === 0 ? (
               <tr>
                 <td
                   colSpan={5}
-                  className="py-10 text-center text-slate-500"
+                  className="py-10 text-center text-[var(--text-secondary)]"
                 >
                   {emptyMessage}
                 </td>

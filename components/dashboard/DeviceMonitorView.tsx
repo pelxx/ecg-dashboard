@@ -24,6 +24,8 @@ type Props = {
   readonly lastActivityTimestamp: number | null;
   readonly connectionState: MQTTConnectionState;
   readonly invalidPayloadCount: number;
+  readonly droppedPacketCount: number;
+  readonly deviceRebootCount: number;
   readonly chartSettings: ECGChartSettings;
   readonly permissions: PermissionSet | null;
   readonly onBack: () => void;
@@ -50,6 +52,8 @@ export default function DeviceMonitorView({
   lastActivityTimestamp,
   connectionState,
   invalidPayloadCount,
+  droppedPacketCount,
+  deviceRebootCount,
   chartSettings,
   permissions,
   onBack,
@@ -65,97 +69,109 @@ export default function DeviceMonitorView({
   onGridChange,
   onLeadToggle,
 }: Props) {
-  return (
-    <section className="space-y-5 p-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-emerald-300">{patient.nama}</h1>
-          <p className="text-sm text-slate-500">
-            MQTT {connectionState.status}
-            {connectionState.error ? ` - ${connectionState.error}` : ""}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge
-            label={`${invalidPayloadCount} invalid payloads`}
-            tone={invalidPayloadCount > 0 ? "yellow" : "gray"}
-          />
-          <button
-            onClick={onBack}
-            className="rounded bg-slate-800 px-3 py-2 text-sm hover:bg-slate-700"
-          >
-            Kembali
-          </button>
-        </div>
+  
+return (
+  <section className="space-y-5 p-6 text-[var(--foreground)]">
+    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div>
+        <h1 className="text-2xl font-bold text-[var(--success)]">
+          {patient.nama}
+        </h1>
+        <p className="text-sm text-[var(--text-secondary)]">
+          MQTT {connectionState.status}
+          {connectionState.error ? ` - ${connectionState.error}` : ""}
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[380px_1fr]">
-        <div className="space-y-4">
-          <PatientInfo
-            patient={patient.assignment}
-            deviceId={patient.deviceId}
-            bpm={bpm}
-            isRecording={isRecording}
-          />
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge
+          label={`${invalidPayloadCount} invalid payloads`}
+          tone={invalidPayloadCount > 0 ? "yellow" : "gray"}
+        />
+        <StatusBadge
+          label={`${droppedPacketCount} dropped packets`}
+          tone={droppedPacketCount > 0 ? "yellow" : "gray"}
+        />
+        <StatusBadge
+          label={`${deviceRebootCount} device reboots`}
+          tone={deviceRebootCount > 0 ? "yellow" : "gray"}
+        />
+        <button
+          onClick={onBack}
+          className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)] transition-colors hover:bg-[var(--surface-secondary)]"
+        >
+          Kembali
+        </button>
+      </div>
+    </div>
 
-          <ChartSettings
-            settings={chartSettings}
-            onWindowChange={onWindowChange}
-            onSensitivityChange={onSensitivityChange}
-            onAutoScaleChange={onAutoScaleChange}
-            onFrozenChange={onFrozenChange}
-            onGridChange={onGridChange}
-            onLeadToggle={onLeadToggle}
-          />
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[380px_1fr]">
+      <div className="space-y-4">
+        <PatientInfo
+          patient={patient.assignment}
+          deviceId={patient.deviceId}
+          bpm={bpm}
+          isRecording={isRecording}
+        />
 
-          <DeviceStatus
-            deviceId={selectedKey}
-            mqttConnected={connectionState.connected}
-            telemetry={telemetry}
-            lastActivityTimestamp={lastActivityTimestamp}
-          />
+        <ChartSettings
+          settings={chartSettings}
+          onWindowChange={onWindowChange}
+          onSensitivityChange={onSensitivityChange}
+          onAutoScaleChange={onAutoScaleChange}
+          onFrozenChange={onFrozenChange}
+          onGridChange={onGridChange}
+          onLeadToggle={onLeadToggle}
+        />
 
-          <ControlPanel
-            deviceId={selectedKey}
-            onRecordToggle={onRecordToggle}
-            onManualSave={onManualSave}
-            onClearBuffer={onClearBuffer}
-            onReconnectMQTT={onReconnectMQTT}
-            onResetDevice={onResetDevice}
-            canRecord={Boolean(permissions?.recordECG)}
-            canSaveSnapshot={Boolean(permissions?.saveSnapshot)}
-          />
-        </div>
+        <DeviceStatus
+          deviceId={selectedKey}
+          mqttConnected={connectionState.connected}
+          telemetry={telemetry}
+          lastActivityTimestamp={lastActivityTimestamp}
+        />
 
-        <div className="space-y-4">
-          <MedicalCard title="ECG Realtime" className="space-y-3">
-            {ECG_LEADS.filter((lead) => chartSettings.visibleLeads[lead.key]).map(
-              (lead) => (
-                <ECGCanvas
-                  key={lead.key}
-                  title={lead.label}
-                  data={leads?.[lead.key] || []}
-                  windowMs={chartSettings.windowMs}
-                  sensitivity={chartSettings.sensitivity}
-                  autoScale={chartSettings.autoScale}
-                  frozen={chartSettings.frozen}
-                  showGrid={chartSettings.showGrid}
-                  sampleRateHz={telemetry.sampleRateHz}
-                />
-              )
-            )}
-          </MedicalCard>
+        <ControlPanel
+          deviceId={selectedKey}
+          onRecordToggle={onRecordToggle}
+          onManualSave={onManualSave}
+          onClearBuffer={onClearBuffer}
+          onReconnectMQTT={onReconnectMQTT}
+          onResetDevice={onResetDevice}
+          canRecord={Boolean(permissions?.recordECG)}
+          canSaveSnapshot={Boolean(permissions?.saveSnapshot)}
+        />
+      </div>
 
-          {permissions?.viewRecordingHistory && (
-            <DataLogger
-              deviceId={selectedKey}
-              canDownload={Boolean(permissions.downloadRecordings)}
-              canDelete={Boolean(permissions.deleteRecordings)}
+      <div className="space-y-4">
+        <MedicalCard title="ECG Realtime" className="space-y-3">
+          {ECG_LEADS.filter(
+            (lead) => chartSettings.visibleLeads[lead.key]
+          ).map((lead) => (
+            <ECGCanvas
+              key={lead.key}
+              title={lead.label}
+              data={leads?.[lead.key] || []}
+              windowMs={chartSettings.windowMs}
+              sensitivity={chartSettings.sensitivity}
+              autoScale={chartSettings.autoScale}
+              frozen={chartSettings.frozen}
+              showGrid={chartSettings.showGrid}
+              sampleRateHz={telemetry.sampleRateHz}
             />
-          )}
-        </div>
+          ))}
+        </MedicalCard>
+
+        {permissions?.viewRecordingHistory && (
+          <DataLogger
+            deviceId={selectedKey}
+            canDownload={Boolean(permissions.downloadRecordings)}
+            canDelete={Boolean(permissions.deleteRecordings)}
+          />
+        )}
       </div>
-    </section>
-  );
+    </div>
+  </section>
+);
+
 }

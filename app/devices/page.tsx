@@ -9,10 +9,10 @@ import DeviceMonitorView from "@/components/dashboard/DeviceMonitorView";
 import { DEFAULT_LEAD_VISIBILITY } from "@/constants/ecg";
 import { useAuth } from "@/hooks/useAuth";
 import { useDevices, type DeviceCard } from "@/hooks/useDevices";
-import { useMQTT } from "@/hooks/useMQTT";
+import { useRealtimeMQTT } from "@/components/realtime/MQTTProvider";
 import type { DeviceTelemetry } from "@/types/device";
 import type { ECGChartSettings, ECGLeadKey, ECGSensitivity } from "@/types/ecg";
-import { saveSnapshot,saveRecording } from "@/services/recording.service";
+import { saveSnapshot } from "@/services/recording.service";
 
 function DevicesContent() {
   const router = useRouter();
@@ -30,9 +30,6 @@ function DevicesContent() {
     showGrid: true,
     visibleLeads: DEFAULT_LEAD_VISIBILITY,
   });
-  const [recordingStatus, setRecordingStatus] = useState<Record<string, boolean>>(
-    {}
-  );
   const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<DeviceCard | null>(null);
 
@@ -42,19 +39,17 @@ function DevicesContent() {
     lastDeviceActivity,
     connectionState,
     deviceStatuses,
+    recordingStatuses,
     invalidPayloadCount,
+    droppedPacketCount,
+    deviceRebootCount,
     clearBuffer,
     reconnectMQTT,
     publish,
     getBufferSnapshot,
-    getRecordingBuffer,
-    clearRecordingBuffer,
-  } = useMQTT({
-    selectedKey,
-    paperSpeed: chartSettings.windowMs,
-    recordingStatus,
-    
-  });
+    startRecording,
+    stopRecording,
+  } = useRealtimeMQTT();
 
   const selectedPatient = useMemo(
     () => devices.find((device) => device.key === selectedKey),
@@ -64,36 +59,16 @@ function DevicesContent() {
 
   const handleRecordToggle = useCallback(
   async (deviceId: string, shouldRecord: boolean) => {
-
-    // START RECORDING
     if (shouldRecord) {
-      clearRecordingBuffer(deviceId);
-
-      setRecordingStatus((previous) => ({
-        ...previous,
-        [deviceId]: true,
-      }));
-
+      await startRecording(deviceId);
       return;
     }
 
-    // STOP RECORDING
-    const recording = getRecordingBuffer(deviceId);
-
-    if (recording) {
-      await saveRecording(deviceId, recording);
-      console.log(recording);
-      clearRecordingBuffer(deviceId);
-    }
-
-    setRecordingStatus((previous) => ({
-      ...previous,
-      [deviceId]: false,
-    }));
+    await stopRecording(deviceId);
   },
   [
-    getRecordingBuffer,
-    clearRecordingBuffer,
+    startRecording,
+    stopRecording,
   ]
 );
 
@@ -197,12 +172,14 @@ const handleManualSave = useCallback(
         leads={liveEcgData[selectedKey]}
         bpm={liveBPM[selectedKey] || 0}
         isRecording={
-          recordingStatus[selectedKey] ?? selectedPatient.isRecording ?? false
+          recordingStatuses[selectedKey]?.isRecording ?? selectedPatient.isRecording ?? false
         }
         telemetry={telemetry}
         lastActivityTimestamp={lastDeviceActivity[selectedKey] || null}
         connectionState={connectionState}
         invalidPayloadCount={invalidPayloadCount}
+        droppedPacketCount={droppedPacketCount[selectedKey] ?? 0}
+        deviceRebootCount={deviceRebootCount[selectedKey] ?? 0}
         chartSettings={chartSettings}
         permissions={permissions}
         onBack={() => router.push("/devices")}

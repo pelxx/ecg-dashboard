@@ -21,32 +21,32 @@ export default function ReportRow({
   deleting,
 }: Props) {
   return (
-    <tr className="border-b border-slate-800 hover:bg-slate-900 transition-colors">
-
-      <td className="px-4 py-3 font-medium text-slate-100">
+    <tr className="border-b border-[var(--border)] transition-colors hover:bg-[var(--surface-secondary)]">
+      <td className="px-4 py-3 font-medium text-[var(--foreground)]">
         {report.deviceId}
       </td>
 
-      <td className="px-4 py-3 text-slate-300">
+      <td className="px-4 py-3 text-[var(--text-secondary)]">
         {format(
           new Date(report.createdAt),
           "dd MMM yyyy HH:mm:ss"
         )}
       </td>
 
-      <td className="px-4 py-3 text-right text-slate-300">
+      <td className="px-4 py-3 text-right text-[var(--foreground)]">
         {((report.durationMs ?? 0) / 1000).toFixed(1)} s
       </td>
 
-      <td className="px-4 py-3 text-right text-slate-300">
+      <td className="px-4 py-3 text-right text-[var(--foreground)]">
         {report.sampleCount ?? "-"}
       </td>
 
       <td className="px-4 py-3 text-center">
         <div className="flex justify-center gap-2">
           <button
+            type="button"
             onClick={() => onView(report)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded bg-emerald-600 text-white transition hover:bg-emerald-500"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--success)] text-white transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--success)]"
             aria-label="View recording"
             title="View recording"
           >
@@ -54,9 +54,10 @@ export default function ReportRow({
           </button>
 
           <button
+            type="button"
             onClick={() => onDelete(report)}
             disabled={deleting}
-            className="inline-flex h-9 w-9 items-center justify-center rounded bg-red-600 text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--danger)] text-white transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Delete recording"
             title="Delete recording"
           >

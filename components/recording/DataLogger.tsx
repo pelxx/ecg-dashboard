@@ -111,6 +111,9 @@ const DataLogger = memo(function DataLogger({
     }
   };
 
+  const secondaryButton =
+    "rounded-md border border-[var(--border)] bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--foreground)] transition-colors hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50";
+
   return (
     <MedicalCard title="Data Logger">
       <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-[1fr_auto_auto]">
@@ -120,6 +123,7 @@ const DataLogger = memo(function DataLogger({
           placeholder="Search records"
           className="field-input"
         />
+
         <select
           value={filter}
           onChange={(event) => setFilter(event.target.value as FilterKey)}
@@ -129,6 +133,7 @@ const DataLogger = memo(function DataLogger({
           <option value="recordings">Recordings</option>
           <option value="snapshots">Snapshots</option>
         </select>
+
         <select
           value={sortKey}
           onChange={(event) => setSortKey(event.target.value as SortKey)}
@@ -141,10 +146,18 @@ const DataLogger = memo(function DataLogger({
       </div>
 
       <div className="max-h-80 overflow-y-auto pr-2">
-        {loading && <p className="py-4 text-sm text-slate-400">Memuat rekaman...</p>}
-        {error && <p className="py-4 text-sm text-red-300">{error}</p>}
+        {loading && (
+          <p className="py-4 text-sm text-[var(--text-secondary)]">
+            Memuat rekaman...
+          </p>
+        )}
+
+        {error && (
+          <p className="py-4 text-sm text-[var(--danger)]">{error}</p>
+        )}
+
         {!loading && visibleRecords.length === 0 && (
-          <p className="py-8 text-center text-sm text-slate-500">
+          <p className="py-8 text-center text-sm text-[var(--text-secondary)]">
             Belum ada data rekaman untuk pasien ini.
           </p>
         )}
@@ -154,33 +167,47 @@ const DataLogger = memo(function DataLogger({
             {visibleRecords.map((record) => (
               <li
                 key={record.key}
-                className="rounded-md border border-slate-800 bg-slate-900/80 p-3"
+                className="rounded-md border border-[var(--border)] bg-[var(--surface-secondary)] p-3 transition-colors"
               >
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0">
-                    <p className="truncate font-semibold text-white">
+                    <p className="truncate font-semibold text-[var(--foreground)]">
                       {record.note || "ECG Recording"}
                     </p>
-                    <dl className="mt-2 grid grid-cols-2 gap-x-5 gap-y-1 text-xs text-slate-400 md:grid-cols-4">
-                      <Metric label="Created" value={formatDateTime(record.createdAt)} />
+
+                    <dl className="mt-2 grid grid-cols-2 gap-x-5 gap-y-1 text-xs md:grid-cols-4">
+                      <Metric
+                        label="Created"
+                        value={formatDateTime(record.createdAt)}
+                      />
                       <Metric
                         label="Duration"
                         value={formatDuration(
-                          record.durationMs ? record.durationMs / 1000 : undefined
+                          record.durationMs
+                            ? record.durationMs / 1000
+                            : undefined
                         )}
                       />
                       <Metric
                         label="Samples"
-                        value={record.sampleCount ? String(record.sampleCount) : "--"}
+                        value={
+                          record.sampleCount
+                            ? String(record.sampleCount)
+                            : "--"
+                        }
                       />
                       <Metric
                         label="Rate"
-                        value={record.sampleRateHz ? `${record.sampleRateHz} Hz` : "--"}
+                        value={
+                          record.sampleRateHz
+                            ? `${record.sampleRateHz} Hz`
+                            : "--"
+                        }
                       />
                     </dl>
                   </div>
 
-                  <div className="flex shrink-0 gap-2">
+                  <div className="flex shrink-0 flex-wrap gap-2">
                     <IconButton
                       label="Download CSV"
                       disabled={downloading === record.key || !canDownload}
@@ -188,16 +215,18 @@ const DataLogger = memo(function DataLogger({
                       busy={downloading === record.key}
                     />
                     <button
+                      type="button"
                       onClick={() => handleDownload(record, "json")}
                       disabled={downloading === record.key || !canDownload}
-                      className="rounded bg-emerald-900 px-3 py-2 text-xs text-white hover:bg-emerald-800 disabled:opacity-50"
+                      className="rounded-md bg-[var(--primary)] px-3 py-2 text-xs text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       JSON
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleDelete(record.key)}
                       disabled={downloading === record.key || !canDelete}
-                      className="rounded bg-red-600 p-2 text-white hover:bg-red-500 disabled:opacity-50"
+                      className="rounded-md bg-[var(--danger)] p-2 text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-50"
                       aria-label="Delete"
                       title="Delete"
                     >
@@ -223,8 +252,8 @@ function Metric({
 }) {
   return (
     <div>
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="truncate text-slate-200">{value}</dd>
+      <dt className="text-[var(--text-secondary)]">{label}</dt>
+      <dd className="truncate text-[var(--foreground)]">{value}</dd>
     </div>
   );
 }
@@ -242,9 +271,10 @@ function IconButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
-      className="rounded bg-emerald-700 p-2 text-white hover:bg-emerald-600 disabled:opacity-50"
+      className="rounded-md bg-[var(--success)] p-2 text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-50"
       aria-label={label}
       title={label}
     >

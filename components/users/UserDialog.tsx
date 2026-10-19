@@ -82,18 +82,27 @@ export default function UserDialog({
     });
   };
 
+  const secondaryButton =
+    "rounded-md border border-[var(--border)] bg-[var(--surface-secondary)] px-4 py-2 text-sm font-medium text-[var(--foreground)] transition-colors hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50";
+
+  const primaryButton =
+    "rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-50";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <form
         onSubmit={handleSubmit}
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-emerald-800/40 bg-slate-950 p-5 shadow-2xl"
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-2xl"
       >
-        <h3 className="mb-4 text-lg font-semibold text-emerald-200">
+        <h3 className="mb-4 text-lg font-semibold text-[var(--foreground)]">
           {mode === "create" ? "Add User" : "Edit User"}
         </h3>
 
         {error && (
-          <div className="mb-4 rounded border border-red-800 bg-red-950/40 p-3 text-sm text-red-200">
+          <div
+            role="alert"
+            className="mb-4 rounded-md border border-[var(--danger)] bg-[var(--surface-secondary)] p-3 text-sm text-[var(--danger)]"
+          >
             {error}
           </div>
         )}
@@ -105,6 +114,7 @@ export default function UserDialog({
               onChange={(event) => setDisplayName(event.target.value)}
               className="field-input"
               placeholder="Staff name"
+              autoComplete="name"
               required
             />
           </Field>
@@ -114,8 +124,9 @@ export default function UserDialog({
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="field-input disabled:opacity-60"
+              className="field-input read-only:cursor-not-allowed read-only:opacity-60"
               placeholder="staff@example.com"
+              autoComplete="email"
               readOnly={mode === "edit"}
               required
             />
@@ -129,6 +140,7 @@ export default function UserDialog({
                 onChange={(event) => setPassword(event.target.value)}
                 className="field-input"
                 placeholder="Minimum 6 characters"
+                autoComplete="new-password"
                 minLength={6}
                 required
               />
@@ -153,7 +165,9 @@ export default function UserDialog({
             <Field label="Status">
               <select
                 value={status}
-                onChange={(event) => setStatus(event.target.value as UserStatus)}
+                onChange={(event) =>
+                  setStatus(event.target.value as UserStatus)
+                }
                 className="field-input"
               >
                 <option value="active">active</option>
@@ -168,14 +182,15 @@ export default function UserDialog({
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="rounded border border-slate-700 bg-slate-900 px-4 py-2 text-slate-200 disabled:opacity-50"
+            className={secondaryButton}
           >
             Batal
           </button>
+
           <button
             type="submit"
             disabled={saving}
-            className="rounded bg-emerald-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
+            className={primaryButton}
           >
             {saving ? "Menyimpan..." : "Simpan"}
           </button>
@@ -193,7 +208,7 @@ function Field({
   readonly children: ReactNode;
 }) {
   return (
-    <label className="block text-sm text-slate-300">
+    <label className="block text-sm text-[var(--foreground)]">
       <span className="mb-1 block">{label}</span>
       {children}
     </label>

@@ -7,9 +7,9 @@ import { useRecordingStatus } from "@/hooks/useRecording";
 type Props = {
   readonly deviceId: string;
   readonly onRecordToggle: (
-  deviceId: string,
-  shouldRecord: boolean
-) => Promise<void>;
+    deviceId: string,
+    shouldRecord: boolean
+  ) => Promise<void>;
   readonly onManualSave: (deviceId: string) => void;
   readonly onClearBuffer: (deviceId: string) => void;
   readonly onReconnectMQTT: () => void;
@@ -28,8 +28,7 @@ const ControlPanel = memo(function ControlPanel({
   canRecord,
   canSaveSnapshot,
 }: Props) {
-  const { isRecording, loading, updateRecordingStatus } =
-    useRecordingStatus(deviceId);
+  const { isRecording, loading } = useRecordingStatus(deviceId);
   const [processing, setProcessing] = useState(false);
 
   const handleRecordToggle = async () => {
@@ -40,9 +39,9 @@ const ControlPanel = memo(function ControlPanel({
 
     const shouldRecord = !isRecording;
     setProcessing(true);
+
     try {
       await onRecordToggle(deviceId, shouldRecord);
-      await updateRecordingStatus(shouldRecord);
     } catch (error) {
       console.error("Failed to update recording status:", error);
       alert("Gagal mengubah status recording.");
@@ -60,51 +59,58 @@ const ControlPanel = memo(function ControlPanel({
     onManualSave(deviceId);
   };
 
+  const secondaryButton =
+    "rounded-md border border-[var(--border)] bg-[var(--surface-secondary)] px-3 py-2 text-sm text-[var(--foreground)] transition-colors hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50";
   return (
     <MedicalCard title="Control Panel">
       {loading ? (
-        <p className="py-8 text-center text-sm text-slate-400">
+        <p className="py-8 text-center text-sm text-[var(--text-secondary)]">
           Loading controls...
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-2">
           <button
+            type="button"
             onClick={handleRecordToggle}
             disabled={processing || !canRecord}
-            className={`rounded px-3 py-2 text-sm font-semibold disabled:opacity-50 ${
+            className={`rounded-md px-3 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               isRecording
-                ? "bg-red-600 text-white hover:bg-red-500"
-                : "bg-emerald-600 text-white hover:bg-emerald-500"
+                ? "bg-[var(--danger)] hover:opacity-85"
+                : "bg-[var(--success)] hover:opacity-85"
             }`}
           >
             {isRecording ? "Stop Recording" : "Start Recording"}
           </button>
 
           <button
+            type="button"
             onClick={handleSnapshot}
             disabled={processing || isRecording || !canSaveSnapshot}
-            className="rounded border border-emerald-700 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-950 disabled:opacity-50"
+            className={`${secondaryButton} border-[var(--primary)] text-[var(--primary)]`}
           >
             Snapshot
           </button>
 
           <button
+            type="button"
             onClick={() => onClearBuffer(deviceId)}
-            className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-900"
+            className={secondaryButton}
           >
             Clear Buffer
           </button>
 
           <button
+            type="button"
             onClick={onReconnectMQTT}
-            className="rounded border border-sky-700 px-3 py-2 text-sm text-sky-100 hover:bg-sky-950"
+            className={`${secondaryButton} border-sky-500/40 text-sky-700 dark:text-sky-300`}
           >
             Reconnect MQTT
           </button>
 
           <button
+            type="button"
             onClick={() => onResetDevice(deviceId)}
-            className="col-span-2 rounded border border-red-800 px-3 py-2 text-sm text-red-100 hover:bg-red-950"
+            className="col-span-2 rounded-md border border-[var(--danger)]/40 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)] transition-colors hover:opacity-80"
           >
             Reset Device
           </button>

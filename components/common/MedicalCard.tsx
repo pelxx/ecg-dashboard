@@ -15,15 +15,18 @@ export default function MedicalCard({
 }: Props) {
   return (
     <section
-      className={`rounded-lg border border-emerald-800/30 bg-slate-950/85 p-4 shadow-lg shadow-black/20 ${className}`}
+      className={`rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg shadow-black/5 transition-colors duration-200 ${className}`}
     >
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-normal text-emerald-300">
+        <h2 className="text-sm font-semibold uppercase tracking-normal text-[var(--success)]">
           {title}
         </h2>
         {action}
       </div>
-      {children}
+
+      <div className="text-[var(--foreground)]">
+        {children}
+      </div>
     </section>
   );
 }

@@ -76,6 +76,7 @@ export default function ReportsView() {
 
     try {
       await deleteRecording(report.key);
+
       if (selectedReport?.key === report.key) {
         setSelectedReport(null);
       }
@@ -91,21 +92,21 @@ export default function ReportsView() {
     return (
       <section className="space-y-5 p-6">
         <div>
-          <h1 className="text-2xl font-bold text-emerald-300">
+          <h1 className="text-2xl font-bold text-[var(--foreground)]">
             ECG Reports
           </h1>
 
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-[var(--text-secondary)]">
             Recording history and exported ECG data.
           </p>
         </div>
 
         <MedicalCard title="Reports">
           <div className="space-y-3 py-4">
-            <div className="h-8 w-48 animate-pulse rounded bg-slate-800" />
-            <div className="h-12 animate-pulse rounded bg-slate-900" />
-            <div className="h-12 animate-pulse rounded bg-slate-900" />
-            <div className="h-12 animate-pulse rounded bg-slate-900" />
+            <div className="h-8 w-48 animate-pulse rounded-md bg-[var(--surface-secondary)]" />
+            <div className="h-12 animate-pulse rounded-md bg-[var(--surface-secondary)]" />
+            <div className="h-12 animate-pulse rounded-md bg-[var(--surface-secondary)]" />
+            <div className="h-12 animate-pulse rounded-md bg-[var(--surface-secondary)]" />
           </div>
         </MedicalCard>
       </section>
@@ -116,17 +117,17 @@ export default function ReportsView() {
     return (
       <section className="space-y-5 p-6">
         <div>
-          <h1 className="text-2xl font-bold text-emerald-300">
+          <h1 className="text-2xl font-bold text-[var(--foreground)]">
             ECG Reports
           </h1>
 
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-[var(--text-secondary)]">
             Recording history and exported ECG data.
           </p>
         </div>
 
         <MedicalCard title="Reports Error">
-          <div className="py-12 text-center text-red-400">
+          <div className="py-12 text-center text-sm text-[var(--danger)]">
             {error}
           </div>
         </MedicalCard>
@@ -136,13 +137,12 @@ export default function ReportsView() {
 
   return (
     <section className="space-y-5 p-6">
-
       <div>
-        <h1 className="text-2xl font-bold text-emerald-300">
+        <h1 className="text-2xl font-bold text-[var(--foreground)]">
           ECG Reports
         </h1>
 
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-[var(--text-secondary)]">
           Recording history and exported ECG data.
         </p>
       </div>
@@ -177,7 +177,6 @@ export default function ReportsView() {
         onDelete={handleDelete}
         deleting={deletingKey === selectedReport?.key}
       />
-
     </section>
   );
 }

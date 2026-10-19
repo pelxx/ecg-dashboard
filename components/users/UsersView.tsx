@@ -9,7 +9,10 @@ import {
   updateUser,
   type StaffUser,
 } from "@/services/user.service";
-import UserDialog, { type UserDialogMode, type UserDialogSubmit } from "./UserDialog";
+import UserDialog, {
+  type UserDialogMode,
+  type UserDialogSubmit,
+} from "./UserDialog";
 import UserTable from "./UserTable";
 
 export default function UsersView() {
@@ -60,8 +63,11 @@ export default function UsersView() {
     setDialogError(null);
   };
 
-  const createUser = async (payload: Extract<UserDialogSubmit, { mode: "create" }>) => {
+  const createUser = async (
+    payload: Extract<UserDialogSubmit, { mode: "create" }>
+  ) => {
     const token = await auth.currentUser?.getIdToken();
+
     if (!token) {
       throw new Error("Authentication session is not available.");
     }
@@ -110,7 +116,9 @@ export default function UsersView() {
     } catch (nextError) {
       console.error("Failed to save user:", nextError);
       setDialogError(
-        nextError instanceof Error ? nextError.message : "Failed to save user."
+        nextError instanceof Error
+          ? nextError.message
+          : "Failed to save user."
       );
     } finally {
       setSaving(false);
@@ -122,6 +130,7 @@ export default function UsersView() {
     if (!window.confirm(`Disable ${user.displayName}?`)) return;
 
     setDisablingUid(user.uid);
+
     try {
       await disableUser(user.uid);
     } catch (nextError) {
@@ -136,8 +145,11 @@ export default function UsersView() {
     <section className="space-y-5 p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-emerald-300">Users</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="text-3xl font-bold text-[var(--foreground)]">
+            Users
+          </h1>
+
+          <p className="text-sm text-[var(--text-secondary)]">
             Manage healthcare staff accounts and roles.
           </p>
         </div>
@@ -145,14 +157,17 @@ export default function UsersView() {
         <button
           type="button"
           onClick={openCreateDialog}
-          className="w-fit rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+          className="w-fit rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
         >
           Add User
         </button>
       </div>
 
       {error && (
-        <div className="rounded border border-red-800 bg-red-950/40 p-3 text-sm text-red-200">
+        <div
+          role="alert"
+          className="rounded-md border border-[var(--danger)] bg-[var(--surface-secondary)] p-3 text-sm text-[var(--danger)]"
+        >
           {error}
         </div>
       )}
@@ -160,14 +175,17 @@ export default function UsersView() {
       <MedicalCard title="Staff Summary">
         <div className="grid grid-cols-2 gap-5 md:grid-cols-4">
           <SummaryValue label="Total" value={users.length} />
+
           <SummaryValue
             label="Active"
             value={users.filter((user) => user.status === "active").length}
           />
+
           <SummaryValue
             label="Doctors"
             value={users.filter((user) => user.role === "doctor").length}
           />
+
           <SummaryValue
             label="Nurses"
             value={users.filter((user) => user.role === "nurse").length}
@@ -205,8 +223,8 @@ function SummaryValue({
 }) {
   return (
     <div>
-      <p className="text-sm text-slate-400">{label}</p>
-      <p className="text-2xl font-bold text-emerald-300">{value}</p>
+      <p className="text-sm text-[var(--text-secondary)]">{label}</p>
+      <p className="text-2xl font-bold text-[var(--success)]">{value}</p>
     </div>
   );
 }

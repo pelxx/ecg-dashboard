@@ -8,17 +8,23 @@ import { usePathname, useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { navigationItems } from "@/lib/permissions";
 import { useAuth } from "@/hooks/useAuth";
+import { useRealtimeMQTT } from "@/components/realtime/MQTTProvider";
+import ThemeToggle from "@/components/common/ThemeToggle";
 
 type Props = {
   children: ReactNode;
 };
 
-const INACTIVITY_TIMEOUT = 15 * 60 * 1000;
+const INACTIVITY_TIMEOUT = 15 *60 * 1000;
 
 export default function AppShell({ children }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const { permissions, profile } = useAuth();
+  const { recordingStatuses, flushRecordings } = useRealtimeMQTT();
+  const hasActiveRecordings = Object.values(recordingStatuses).some(
+    (status) => status.isRecording
+  );
 
   const items = navigationItems.filter(
     (item) => permissions?.[item.permission]
@@ -36,6 +42,7 @@ export default function AppShell({ children }: Props) {
 
     const startTimer = () => {
       clearTimer();
+      if (hasActiveRecordings) return;
 
       timer = setTimeout(async () => {
         try {
@@ -81,22 +88,24 @@ export default function AppShell({ children }: Props) {
         window.removeEventListener(event, handleActivity);
       });
     };
-  }, [router]);
+  }, [hasActiveRecordings, router]);
 
   const handleSignOut = async () => {
+    await flushRecordings();
     await signOut(auth);
     router.replace("/");
   };
 
+
   return (
-    <main className="min-h-screen bg-black text-white">
-      <header className="border-b border-gray-800 bg-gray-950/90 px-6 py-3">
+    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)] transition-colors duration-200">
+      <header className="border-b border-[var(--border)] bg-[var(--surface)] px-6 py-3 transition-colors duration-200">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-lg font-bold text-blue-400">
-              ECG Dashboard
+            <h1 className="text-lg font-bold text-[var(--foreground)]">
+              Pemantauan ECG dan Pengujian MQTT ECG
             </h1>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-[var(--text-secondary)]">
               {profile?.displayName ?? "Authenticated user"}
             </p>
           </div>
@@ -111,10 +120,10 @@ export default function AppShell({ children }: Props) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`rounded px-3 py-1.5 text-sm transition ${
+                  className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
                     active
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-900 text-gray-300 hover:bg-gray-800"
+                      ? "bg-[var(--primary)] text-white"
+                      : "bg-[var(--surface-secondary)] text-[var(--foreground)] hover:opacity-80"
                   }`}
                 >
                   {item.label}
@@ -122,9 +131,11 @@ export default function AppShell({ children }: Props) {
               );
             })}
 
+            <ThemeToggle />
+
             <button
               onClick={handleSignOut}
-              className="rounded border border-gray-700 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-900"
+              className="rounded-md border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--foreground)] transition-colors hover:bg-[var(--surface-secondary)]"
             >
               Logout
             </button>

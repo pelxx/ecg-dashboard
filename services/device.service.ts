@@ -1,5 +1,5 @@
 
-import { off, onValue, ref, remove, update } from "firebase/database";
+import { onValue, ref, remove, update } from "firebase/database";
 import { rtdb } from "@/lib/firebase";
 import type { DeviceCard, RawDevice } from "@/types/device";
 import type { PatientProfile } from "@/types/patient";
@@ -74,7 +74,7 @@ export const subscribeDevices = (
     (error) => onError?.(error)
   );
 
-  return () => off(node, "value", unsubscribe);
+  return unsubscribe;
 };
 
 export const saveDeviceAssignment = async (

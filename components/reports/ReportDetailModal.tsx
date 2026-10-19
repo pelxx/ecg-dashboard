@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import {
@@ -162,17 +161,19 @@ export default function ReportDetailModal({
   const detail = fullReport ?? report;
   const isFetching = !error && (loading || fullReport?.key !== report.key);
 
+  const secondaryButton =
+    "inline-flex items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-secondary)] px-4 py-2 text-sm font-medium text-[var(--foreground)] transition-colors hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-
-      <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-lg bg-slate-950 shadow-2xl">
-
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-2xl">
         <MedicalCard
           title="ECG Recording Detail"
           action={
             <button
+              type="button"
               onClick={onClose}
-              className="inline-flex h-8 w-8 items-center justify-center rounded bg-slate-800 text-slate-100 hover:bg-slate-700"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface-secondary)] text-[var(--foreground)] transition-colors hover:opacity-80"
               aria-label="Close report detail"
               title="Close"
             >
@@ -180,20 +181,19 @@ export default function ReportDetailModal({
             </button>
           }
         >
-
           {isFetching && (
             <div className="space-y-4 py-4">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <div className="h-16 animate-pulse rounded bg-slate-900" />
-                <div className="h-16 animate-pulse rounded bg-slate-900" />
-                <div className="h-16 animate-pulse rounded bg-slate-900" />
+                <div className="h-16 animate-pulse rounded-md bg-[var(--surface-secondary)]" />
+                <div className="h-16 animate-pulse rounded-md bg-[var(--surface-secondary)]" />
+                <div className="h-16 animate-pulse rounded-md bg-[var(--surface-secondary)]" />
               </div>
-              <div className="h-72 animate-pulse rounded bg-slate-900" />
+              <div className="h-72 animate-pulse rounded-md bg-[var(--surface-secondary)]" />
             </div>
           )}
 
           {!isFetching && error && (
-            <div className="py-12 text-center text-red-400">
+            <div className="py-12 text-center text-sm text-[var(--danger)]">
               {error}
             </div>
           )}
@@ -201,7 +201,6 @@ export default function ReportDetailModal({
           {!isFetching && !error && (
             <>
               <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-3">
-
                 <Metric label="Device ID" value={detail.deviceId} />
                 <Metric label="Note" value={detail.note || "--"} />
                 <Metric
@@ -211,7 +210,9 @@ export default function ReportDetailModal({
                 <Metric
                   label="Duration"
                   value={formatDuration(
-                    detail.durationMs ? detail.durationMs / 1000 : undefined
+                    detail.durationMs
+                      ? detail.durationMs / 1000
+                      : undefined
                   )}
                 />
                 <Metric
@@ -222,9 +223,10 @@ export default function ReportDetailModal({
                 />
                 <Metric
                   label="Sample Count"
-                  value={detail.sampleCount ? String(detail.sampleCount) : "--"}
+                  value={
+                    detail.sampleCount ? String(detail.sampleCount) : "--"
+                  }
                 />
-
               </div>
 
               <div className="mt-6 space-y-4">
@@ -241,47 +243,45 @@ export default function ReportDetailModal({
                     />
                   ))
                 ) : (
-                  <div className="rounded-lg border border-dashed border-slate-700 p-10 text-center text-slate-500">
+                  <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-secondary)] p-10 text-center text-sm text-[var(--text-secondary)]">
                     No ECG samples are stored in this recording.
                   </div>
                 )}
               </div>
 
               <div className="mt-6 flex flex-col justify-end gap-3 sm:flex-row">
-
                 <button
+                  type="button"
                   onClick={handleDownloadCsv}
                   disabled={!fullReport}
-                  className="inline-flex items-center justify-center gap-2 rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-[var(--success)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <ArrowDownTrayIcon className="h-4 w-4" />
                   Download CSV
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => onDelete(detail)}
                   disabled={deleting}
-                  className="inline-flex items-center justify-center gap-2 rounded bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-[var(--danger)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <TrashIcon className="h-4 w-4" />
                   {deleting ? "Deleting..." : "Delete"}
                 </button>
 
                 <button
+                  type="button"
                   onClick={onClose}
-                  className="rounded border border-slate-700 px-4 py-2 text-sm hover:bg-slate-900"
+                  className={secondaryButton}
                 >
                   Close
                 </button>
-
               </div>
             </>
           )}
-
         </MedicalCard>
-
       </div>
-
     </div>
   );
 }
@@ -294,9 +294,11 @@ function Metric({
   readonly value: string;
 }) {
   return (
-    <div>
-      <p className="text-slate-500">{label}</p>
-      <p className="break-words font-medium text-slate-100">{value}</p>
+    <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface-secondary)] p-3">
+      <p className="mb-1 text-xs text-[var(--text-secondary)]">{label}</p>
+      <p className="break-words font-medium text-[var(--foreground)]">
+        {value}
+      </p>
     </div>
   );
 }
