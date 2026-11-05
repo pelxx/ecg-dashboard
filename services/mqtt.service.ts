@@ -100,7 +100,6 @@ export class MQTTService {
       connected: false,
       error: null,
     });
-    console.log("Broker URL:", options.brokerUrl);
     const client = mqtt.connect(options.brokerUrl, {
       username:process.env.NEXT_PUBLIC_MQTT_USERNAME,
       password:process.env.NEXT_PUBLIC_MQTT_PASSWORD,
@@ -165,11 +164,7 @@ export class MQTTService {
   if (!this.client?.connected) return;
 
   for (const topic of topics) {
-    console.log("Subscribe:", topic);
-
-    this.client.subscribe(topic, (err) => {
-      console.log(topic, err ?? "OK");
-    });
+    this.client.subscribe(topic);
   }
 }
 
@@ -228,12 +223,6 @@ const deviceId =
 
     if (root === "ecg" && event === "realtime") {
       const packet = parseEcgPayload(deviceId, payload);
-      console.log({
-      chunkSeq: packet?.chunkSeq,
-      startMillis: packet?.startMillis,
-      receivedAt: packet?.receivedAt,
-      lead1: packet?.lead1.length,
-      });
       if (!packet) {
         return { type: "invalid", topic, reason: "Invalid ECG payload" };
       }
